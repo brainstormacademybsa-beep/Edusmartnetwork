@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Settings,
   DollarSign,
@@ -75,8 +75,14 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
   const [primaryColor, setPrimaryColor] = useState(school.primaryColor);
   const [secondaryColor, setSecondaryColor] = useState(school.secondaryColor);
   const [showPositionOnResult, setShowPositionOnResult] = useState(school.showPositionOnResult ?? true);
+  const [requireResultPin, setRequireResultPin] = useState(school.requireResultPin ?? true);
   const [brandingSuccess, setBrandingSuccess] = useState('');
   const [copiedPortalLink, setCopiedPortalLink] = useState(false);
+
+  useEffect(() => {
+    setShowPositionOnResult(school.showPositionOnResult ?? true);
+    setRequireResultPin(school.requireResultPin ?? true);
+  }, [school.showPositionOnResult, school.requireResultPin]);
 
   // Fee State
   const [selectedFeeReceipt, setSelectedFeeReceipt] = useState<FeePayment | null>(null);
@@ -95,7 +101,6 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserParentPhone, setNewUserParentPhone] = useState('');
   const [newUserParentWhatsapp, setNewUserParentWhatsapp] = useState('');
-  const [newUserStudentPin, setNewUserStudentPin] = useState('');
   const [newUserRole, setNewUserRole] = useState<'TEACHER' | 'STUDENT' | 'PARENT'>('STUDENT');
   const [newUserClass, setNewUserClass] = useState('JSS 1A');
   const [newUserGender, setNewUserGender] = useState<'Male' | 'Female'>('Male');
@@ -160,10 +165,25 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
       primaryColor,
       secondaryColor,
       showPositionOnResult,
+      requireResultPin,
     };
     storageService.updateSchool(updated);
-    setBrandingSuccess('School portal branding updated successfully!');
+    setBrandingSuccess('School portal branding and result policies updated successfully!');
     setTimeout(() => setBrandingSuccess(''), 3000);
+  };
+
+  // Instant Toggle for Result PIN Requirement
+  const handleToggleRequireResultPin = (activate: boolean) => {
+    setRequireResultPin(activate);
+    const updated = storageService.toggleResultPinRequirement(school.id, activate);
+    if (updated) {
+      setPinSuccessMsg(
+        activate
+          ? 'Result Checking PIN Requirement ACTIVATED. Scratch card PIN is now mandatory for students and parents to check results.'
+          : 'Result Checking PIN Requirement DEACTIVATED. Students and parents can now check and print report cards directly using only their Registration Number.'
+      );
+      setTimeout(() => setPinSuccessMsg(''), 5000);
+    }
   };
 
   // Record Payment
@@ -277,7 +297,8 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
       role: newUserRole,
       parentPhone: newUserRole === 'STUDENT' ? derivedPrimaryPhone : undefined,
       parentWhatsapp: newUserRole === 'STUDENT' ? derivedPrimaryWhatsapp : undefined,
-      studentPin: newUserRole === 'STUDENT' ? (newUserStudentPin || '1234') : undefined,
+      studentPin: newUserRole === 'STUDENT' ? finalRegNo : undefined,
+      password: newUserRole === 'STUDENT' ? finalRegNo : undefined,
       className: newUserRole === 'STUDENT' ? newUserClass : (newUserAssignedClasses[0] || newUserClass),
       assignedClasses: newUserRole === 'TEACHER' ? (newUserAssignedClasses.length > 0 ? newUserAssignedClasses : [newUserClass]) : undefined,
       gender: newUserRole === 'STUDENT' ? newUserGender : undefined,
@@ -328,11 +349,10 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
     setNewUserGuardianWhatsapp('');
     setNewUserGuardianOccupation('');
     setNewUserGuardianAddress('');
-    setNewUserStudentPin('1234');
     setCustomRegNo('');
     setNewUserResidentAddress('');
     setNewUserAvatarUrl('');
-    alert(`New ${newUserRole} registered successfully!\nAssigned Reg No: ${finalRegNo}${newUserRole === 'STUDENT' ? `\nStudent Login PIN: ${newUserStudentPin || '1234'}\nLiving With: ${newUserLivingWith}` : ''}`);
+    alert(`New ${newUserRole} registered successfully!\nAssigned Reg No: ${finalRegNo}${newUserRole === 'STUDENT' ? `\nStudent Portal Password: ${finalRegNo} (Registration Number maintained as password)\nLiving With: ${newUserLivingWith}` : ''}`);
   };
 
   // Result Management Logic
@@ -857,6 +877,58 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
                   <div>
                     <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">HIDE Position on Results (✕)</p>
                     <p className="text-[10px] text-slate-500">Omit position ranking completely from report cards</p>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div className="bg-blue-50/80 p-4 rounded-xl border border-blue-200 space-y-3">
+              <div>
+                <p className="text-xs font-bold text-slate-900 uppercase tracking-wider mb-1 flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-blue-900" />
+                  <span>Scratch Card PIN for Children Result Checking</span>
+                </p>
+                <p className="text-[11px] text-slate-600 font-medium leading-relaxed">
+                  Permit or restrict scratch card PIN requirement when students, parents, or guardians check published term results online.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <label
+                  onClick={() => setRequireResultPin(true)}
+                  className={`p-3 rounded-lg border-2 cursor-pointer flex items-center gap-3 transition ${
+                    requireResultPin
+                      ? 'border-emerald-600 bg-emerald-50/80 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center font-black text-xs ${
+                    requireResultPin ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'
+                  }`}>
+                    {requireResultPin ? '✓' : ''}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">ACTIVATE PIN Requirement (✓)</p>
+                    <p className="text-[10px] text-slate-500">Mandatory 12-digit scratch card PIN needed to view results</p>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => setRequireResultPin(false)}
+                  className={`p-3 rounded-lg border-2 cursor-pointer flex items-center gap-3 transition ${
+                    !requireResultPin
+                      ? 'border-blue-700 bg-blue-100/70 shadow-sm'
+                      : 'border-slate-200 bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center font-black text-xs ${
+                    !requireResultPin ? 'border-blue-700 bg-blue-700 text-white' : 'border-slate-300'
+                  }`}>
+                    {!requireResultPin ? '✕' : ''}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900 uppercase tracking-wider">DEACTIVATE PIN (Free Access) (✕)</p>
+                    <p className="text-[10px] text-slate-500">Direct result access with Registration Number only (No PIN needed)</p>
                   </div>
                 </label>
               </div>
@@ -1503,7 +1575,7 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
                     </div>
                   </div>
 
-                  {/* Primary Notifications & Login PIN */}
+                  {/* Primary Notifications & Login Credentials Note */}
                   <div className="space-y-3 p-3 bg-slate-100 rounded-lg border border-slate-200">
                     <div>
                       <label className="block text-slate-800 font-bold uppercase tracking-wider text-[10px] mb-1">
@@ -1518,18 +1590,16 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-slate-800 font-bold uppercase tracking-wider text-[10px] mb-1">
-                        Student Portal Login PIN (4-Digits)
-                      </label>
-                      <input
-                        type="text"
-                        maxLength={6}
-                        placeholder="e.g. 4821"
-                        value={newUserStudentPin}
-                        onChange={(e) => setNewUserStudentPin(e.target.value)}
-                        className="w-full bg-white border border-slate-300 rounded px-3 py-2 text-blue-900 font-mono font-bold tracking-widest focus:outline-none focus:border-blue-900"
-                      />
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-[11px] text-blue-950 flex items-start gap-2.5">
+                      <KeyRound className="w-4 h-4 text-blue-800 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold block text-blue-900 uppercase text-[10px] tracking-wider">
+                          Password Policy for Students:
+                        </span>
+                        <span>
+                          No separate password required. Students maintain their assigned <strong>Registration Number ({customRegNo.trim() || autoGeneratedRegNo})</strong> as their password to access the student portal.
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1683,7 +1753,7 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
                           <>
                             {u.gender && <span>• {u.gender}</span>}
                             {u.age && <span>• {u.age} yrs</span>}
-                            {u.studentPin && <span className="text-blue-900 font-bold">• PIN: {u.studentPin}</span>}
+                            <span className="text-blue-900 font-bold">• Password: {u.regNo}</span>
                             {u.parentPhone && <span className="text-emerald-700 font-bold">• Phone: {u.parentPhone}</span>}
                           </>
                         ) : (
@@ -1751,53 +1821,236 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
 
       {/* TAB 5: RESULT PINS */}
       {activeTab === 'pins' && (
-        <div className="bg-white border border-slate-200 rounded p-6 shadow-sm space-y-4 text-xs">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <KeyRound className="w-5 h-5 text-amber-500" />
-                <span>Result Checking Scratch Card PIN Generator</span>
-              </h2>
-              <p className="text-xs text-slate-500">Generate 12-digit PIN codes for students/parents to check results online.</p>
+        <div className="space-y-6 text-xs">
+          {/* Master Policy Card: Activate / Deactivate Result PIN */}
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-amber-500" />
+                  <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider">
+                    Children Result PIN Policy & Verification Control
+                  </h2>
+                </div>
+                <p className="text-xs text-slate-500 font-medium">
+                  Choose whether children, parents, and portal visitors must provide a scratch card PIN to check published results.
+                </p>
+              </div>
+
+              {/* Status Badge */}
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Active Policy:</span>
+                <span
+                  className={`px-3 py-1.5 rounded-full text-xs font-black uppercase tracking-wider shadow-sm flex items-center gap-1.5 ${
+                    requireResultPin
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-blue-900 text-amber-300'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${requireResultPin ? 'bg-white animate-pulse' : 'bg-amber-300'}`}></span>
+                  {requireResultPin ? 'ACTIVATED (PIN Mandatory)' : 'DEACTIVATED (Direct Access)'}
+                </span>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={1}
-                max={20}
-                value={pinCountToGenerate}
-                onChange={(e) => setPinCountToGenerate(Number(e.target.value))}
-                className="w-16 bg-slate-50 border border-slate-300 rounded px-2 py-1.5 text-center text-slate-900 font-mono text-xs focus:outline-none focus:border-blue-900 font-bold"
-              />
-              <button
-                onClick={handleGeneratePins}
-                className="px-4 py-2 bg-blue-900 hover:bg-blue-800 text-amber-300 font-bold uppercase tracking-wider rounded text-xs shadow-sm"
+            {/* Interactive Toggle Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Option 1: Activate PIN */}
+              <div
+                onClick={() => handleToggleRequireResultPin(true)}
+                className={`p-5 rounded-xl border-2 cursor-pointer transition relative flex flex-col justify-between space-y-4 ${
+                  requireResultPin
+                    ? 'border-emerald-600 bg-emerald-50/70 shadow-md ring-2 ring-emerald-500/20'
+                    : 'border-slate-200 bg-slate-50/60 hover:border-emerald-300 hover:bg-white'
+                }`}
               >
-                + Generate PINs
-              </button>
+                <div className="flex items-start gap-3.5">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-black shrink-0 ${
+                      requireResultPin ? 'bg-emerald-600 text-white shadow-sm' : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <CheckCircle2 className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-black text-slate-950 uppercase tracking-tight">
+                        ACTIVATE Result PIN Requirement
+                      </p>
+                      {requireResultPin && (
+                        <span className="px-2 py-0.5 bg-emerald-600 text-white rounded text-[9px] font-black uppercase tracking-widest">
+                          CURRENT
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                      Scratch card PIN is <strong>mandatory</strong>. Students and parents must provide a valid 12-digit PIN code to check, view, or download term report sheets.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between text-[11px] font-semibold">
+                  <span className="text-emerald-800">
+                    {requireResultPin ? '✓ Enforced on Result Checker Portal' : 'Click to activate PIN requirement'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleRequireResultPin(true);
+                    }}
+                    className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition ${
+                      requireResultPin
+                        ? 'bg-emerald-600 text-white shadow-sm'
+                        : 'bg-slate-200 text-slate-700 hover:bg-emerald-600 hover:text-white'
+                    }`}
+                  >
+                    {requireResultPin ? 'Active Policy' : 'Activate Policy'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Option 2: Deactivate PIN */}
+              <div
+                onClick={() => handleToggleRequireResultPin(false)}
+                className={`p-5 rounded-xl border-2 cursor-pointer transition relative flex flex-col justify-between space-y-4 ${
+                  !requireResultPin
+                    ? 'border-blue-900 bg-blue-50/70 shadow-md ring-2 ring-blue-900/20'
+                    : 'border-slate-200 bg-slate-50/60 hover:border-blue-300 hover:bg-white'
+                }`}
+              >
+                <div className="flex items-start gap-3.5">
+                  <div
+                    className={`w-9 h-9 rounded-xl flex items-center justify-center font-black shrink-0 ${
+                      !requireResultPin ? 'bg-blue-900 text-amber-300 shadow-sm' : 'bg-slate-200 text-slate-600'
+                    }`}
+                  >
+                    <KeyRound className="w-5 h-5" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-black text-slate-950 uppercase tracking-tight">
+                        DEACTIVATE PIN (Direct Result Access)
+                      </p>
+                      {!requireResultPin && (
+                        <span className="px-2 py-0.5 bg-blue-900 text-amber-300 rounded text-[9px] font-black uppercase tracking-widest">
+                          CURRENT
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                      Scratch card PIN is <strong>disabled</strong>. Students and parents can access, check, and print their report cards directly using only their <strong>Registration Number</strong>.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-blue-200/60 flex items-center justify-between text-[11px] font-semibold">
+                  <span className="text-blue-900">
+                    {!requireResultPin ? '✓ Open Access Active (No PIN Required)' : 'Click to deactivate PIN requirement'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleRequireResultPin(false);
+                    }}
+                    className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wider transition ${
+                      !requireResultPin
+                        ? 'bg-blue-900 text-amber-300 shadow-sm'
+                        : 'bg-slate-200 text-slate-700 hover:bg-blue-900 hover:text-amber-300'
+                    }`}
+                  >
+                    {!requireResultPin ? 'Active Policy' : 'Deactivate Policy'}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Metrics Bar */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">PIN Status</span>
+                <span className={`text-sm font-black ${requireResultPin ? 'text-emerald-700' : 'text-blue-900'}`}>
+                  {requireResultPin ? 'MANDATORY' : 'DEACTIVATED'}
+                </span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Total PINs</span>
+                <span className="text-sm font-black text-slate-900">{pins.length} PIN Codes</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Unused PINs</span>
+                <span className="text-sm font-black text-emerald-700">{pins.filter((p) => !p.isUsed).length} Available</span>
+              </div>
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Used PINs</span>
+                <span className="text-sm font-black text-amber-700">{pins.filter((p) => p.isUsed).length} Consumed</span>
+              </div>
             </div>
           </div>
 
-          {pinSuccessMsg && (
-            <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded font-semibold">
-              {pinSuccessMsg}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {pins.map((p) => (
-              <div key={p.id} className="p-3 bg-slate-50 rounded border border-slate-200 flex items-center justify-between">
-                <div>
-                  <span className="font-mono text-blue-900 font-bold text-sm block">{p.pinCode}</span>
-                  <span className="text-[10px] text-slate-500 font-mono">Uses: {p.usesCount} / {p.maxUses}</span>
-                </div>
-
-                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${p.isUsed ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
-                  {p.isUsed ? 'USED' : 'UNUSED'}
-                </span>
+          {/* PIN Generator & Card Inventory */}
+          <div className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-amber-500" />
+                  <span>Scratch Card PIN Generator & Batch Inventory</span>
+                </h3>
+                <p className="text-xs text-slate-500">Generate 12-digit PIN codes for students/parents to check results online.</p>
               </div>
-            ))}
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={pinCountToGenerate}
+                  onChange={(e) => setPinCountToGenerate(Number(e.target.value))}
+                  className="w-16 bg-slate-50 border border-slate-300 rounded px-2 py-1.5 text-center text-slate-900 font-mono text-xs focus:outline-none focus:border-blue-900 font-bold"
+                  title="Number of PINs to generate"
+                />
+                <button
+                  onClick={handleGeneratePins}
+                  className="px-4 py-2 bg-blue-900 hover:bg-blue-800 text-amber-300 font-bold uppercase tracking-wider rounded text-xs shadow-sm transition flex items-center gap-1.5"
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>+ Generate PINs</span>
+                </button>
+              </div>
+            </div>
+
+            {pinSuccessMsg && (
+              <div className="p-3 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-lg font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{pinSuccessMsg}</span>
+              </div>
+            )}
+
+            {pins.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded-lg space-y-2">
+                <KeyRound className="w-8 h-8 text-slate-300 mx-auto" />
+                <p className="text-xs font-bold text-slate-700">No Scratch Card PINs Generated Yet</p>
+                <p className="text-[11px] text-slate-500 max-w-sm mx-auto">
+                  Click the "+ Generate PINs" button above to produce a batch of 12-digit scratch card PIN codes for student results.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                {pins.map((p) => (
+                  <div key={p.id} className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between hover:border-blue-300 transition">
+                    <div>
+                      <span className="font-mono text-blue-900 font-black text-sm block tracking-wide">{p.pinCode}</span>
+                      <span className="text-[10px] text-slate-500 font-mono">Uses: {p.usesCount} / {p.maxUses} {p.studentRegNo ? `• ${p.studentRegNo}` : ''}</span>
+                    </div>
+
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${p.isUsed ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-emerald-100 text-emerald-800 border border-emerald-300'}`}>
+                      {p.isUsed ? 'USED' : 'AVAILABLE'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

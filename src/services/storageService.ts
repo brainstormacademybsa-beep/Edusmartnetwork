@@ -144,6 +144,8 @@ class StorageService {
       isApproved: false,
       studentCount: 0,
       teacherCount: 0,
+      showPositionOnResult: school.showPositionOnResult ?? true,
+      requireResultPin: school.requireResultPin ?? true,
     };
     schools.push(newSchool);
     this.setItem(STORAGE_KEYS.SCHOOLS, schools);
@@ -206,10 +208,13 @@ class StorageService {
 
   public addUser(user: Omit<User, 'id'>): User {
     const users = this.getUsers();
+    const defaultPassword = user.role === 'STUDENT' ? user.regNo : (user.password || 'password123');
+    const defaultStudentPin = user.role === 'STUDENT' ? user.regNo : user.studentPin;
     const newUser: User = {
       ...user,
       id: `user-${Date.now()}`,
-      password: user.password || 'password123',
+      password: user.password || defaultPassword,
+      studentPin: defaultStudentPin,
     };
     users.push(newUser);
     this.setItem(STORAGE_KEYS.USERS, users);
@@ -631,18 +636,21 @@ class StorageService {
     const school = allSchools.find((s) => s.id === user.schoolId) || this.getActiveSchool();
 
     // Generate secure human-friendly new password: e.g. "Crown#7842" or custom
+    // For students: students maintain registration number as password
     const schoolPrefix = school.subdomain
       ? school.subdomain.charAt(0).toUpperCase() + school.subdomain.slice(1, 4)
       : 'Pass';
     const randomDigits = Math.floor(1000 + Math.random() * 9000);
-    const newPassword = options?.customNewPassword || `${schoolPrefix}#${randomDigits}`;
+    const newPassword =
+      user.role === 'STUDENT'
+        ? user.regNo
+        : (options?.customNewPassword || `${schoolPrefix}#${randomDigits}`);
 
     // Update user record
     const updatedUser: User = {
       ...user,
       password: newPassword,
-      // If student with PIN, also ensure studentPin is updated/synced
-      studentPin: user.role === 'STUDENT' ? (user.studentPin || String(randomDigits)) : user.studentPin,
+      studentPin: user.role === 'STUDENT' ? user.regNo : user.studentPin,
     };
 
     this.updateUser(updatedUser);
@@ -936,8 +944,7 @@ class StorageService {
     app.regNoAssigned = regNo;
     this.setItem(STORAGE_KEYS.ADMISSIONS, admissions);
 
-    // Create student account (Safe Under-18 model: Reg No + PIN, Parent Phone & WhatsApp for notifications)
-    const generatedPin = Math.floor(1000 + Math.random() * 9000).toString();
+    // Create student account: Student maintains registration number as password
     const newStudent: User = {
       id: `user-student-${Date.now()}`,
       schoolId: app.schoolId,
@@ -946,7 +953,7 @@ class StorageService {
       role: 'STUDENT',
       parentPhone: app.parentPhone || app.fatherPhone || app.motherPhone || app.guardianPhone,
       parentWhatsapp: app.parentWhatsapp || app.guardianWhatsapp || app.parentPhone,
-      studentPin: generatedPin,
+      studentPin: regNo,
       className: app.classApplying,
       avatarUrl: app.passportUrl,
       gender: app.gender,
@@ -974,7 +981,7 @@ class StorageService {
       guardianWhatsapp: app.guardianWhatsapp,
       guardianOccupation: app.guardianOccupation,
       guardianAddress: app.guardianAddress,
-      password: 'password123',
+      password: regNo,
     };
     this.addUser(newStudent);
     return newStudent;
@@ -1061,8 +1068,14 @@ class StorageService {
   // --- SCHOOL SECURITY SETTINGS ---
   public getSecuritySettings(schoolId: string): SchoolSecuritySettings {
     const all = this.getItem<Record<string, SchoolSecuritySettings>>(STORAGE_KEYS.SECURITY_SETTINGS, {});
+    const school = this.getSchools().find((s) => s.id === schoolId);
+    const defaultRequirePin = school?.requireResultPin ?? true;
+
     if (all[schoolId]) {
-      return all[schoolId];
+      return {
+        ...all[schoolId],
+        requirePinForResultChecking: all[schoolId].requirePinForResultChecking ?? defaultRequirePin,
+      };
     }
     const defaultSettings: SchoolSecuritySettings = {
       schoolId,
@@ -1070,11 +1083,45 @@ class StorageService {
       requirePinForScoreEdit: true,
       requirePinForStudentDeletion: true,
       requirePinForPinGeneration: true,
+      requirePinForResultChecking: defaultRequirePin,
       maxFailedPinAttempts: 5,
       autoSessionTimeoutMinutes: 30,
       lockoutDurationMinutes: 15,
     };
     return defaultSettings;
+  }
+
+  public toggleResultPinRequirement(schoolId: string, required: boolean): School | null {
+    const schools = this.getSchools();
+    const school = schools.find((s) => s.id === schoolId);
+    if (!school) return null;
+
+    const updatedSchool: School = {
+      ...school,
+      requireResultPin: required,
+    };
+    this.updateSchool(updatedSchool);
+
+    const sec = this.getSecuritySettings(schoolId);
+    const updatedSec: SchoolSecuritySettings = {
+      ...sec,
+      requirePinForResultChecking: required,
+    };
+    const all = this.getItem<Record<string, SchoolSecuritySettings>>(STORAGE_KEYS.SECURITY_SETTINGS, {});
+    all[schoolId] = updatedSec;
+    this.setItem(STORAGE_KEYS.SECURITY_SETTINGS, all);
+
+    this.addAuditLog({
+      schoolId,
+      actorId: 'admin',
+      actorName: 'School Administrator',
+      actorRole: 'SCHOOL_ADMIN',
+      action: 'SETTINGS_UPDATE',
+      details: `Result checking scratch card PIN requirement was ${required ? 'ACTIVATED (PIN Mandatory)' : 'DEACTIVATED (Direct Result Access Enabled)'}.`,
+      severity: required ? 'INFO' : 'WARNING',
+    });
+
+    return updatedSchool;
   }
 
   public updateSecuritySettings(settings: SchoolSecuritySettings) {

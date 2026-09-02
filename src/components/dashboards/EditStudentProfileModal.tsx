@@ -48,7 +48,6 @@ export const EditStudentProfileModal: React.FC<EditStudentProfileModalProps> = (
   const [lga, setLga] = useState(student.lga || 'Ikeja');
   const [residentAddress, setResidentAddress] = useState(student.residentAddress || '');
   const [avatarUrl, setAvatarUrl] = useState(student.avatarUrl || '');
-  const [studentPin, setStudentPin] = useState(student.studentPin || '1234');
 
   // Living Arrangement
   const [livingWith, setLivingWith] = useState<string>(student.livingWith || 'Biological Parents');
@@ -91,7 +90,6 @@ export const EditStudentProfileModal: React.FC<EditStudentProfileModalProps> = (
       setLga(student.lga || 'Ikeja');
       setResidentAddress(student.residentAddress || '');
       setAvatarUrl(student.avatarUrl || '');
-      setStudentPin(student.studentPin || '1234');
       setLivingWith(student.livingWith || 'Biological Parents');
       setPrimaryContactPerson(student.primaryContactPerson || 'Both Parents');
       setFatherName(student.fatherName || '');
@@ -154,7 +152,8 @@ export const EditStudentProfileModal: React.FC<EditStudentProfileModalProps> = (
       lga,
       residentAddress: residentAddress.trim(),
       avatarUrl: avatarUrl || student.avatarUrl,
-      studentPin: studentPin.trim() || '1234',
+      studentPin: student.regNo,
+      password: student.regNo,
       livingWith,
       primaryContactPerson,
       fatherName: fatherName.trim(),
@@ -640,7 +639,7 @@ export const EditStudentProfileModal: React.FC<EditStudentProfileModalProps> = (
               <ShieldCheck className="w-4 h-4 text-blue-900" /> 5. Portal Credentials & Notification Dispatch
             </h4>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-slate-700 font-bold uppercase tracking-wider text-[9px] mb-1">
                   Primary SMS Line
@@ -666,18 +665,17 @@ export const EditStudentProfileModal: React.FC<EditStudentProfileModalProps> = (
                   className="w-full bg-white border border-slate-300 rounded px-2.5 py-2 text-xs font-mono font-bold"
                 />
               </div>
+            </div>
 
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-[11px] text-blue-950 flex items-start gap-2.5">
+              <KeyRound className="w-4 h-4 text-blue-800 shrink-0 mt-0.5" />
               <div>
-                <label className="block text-slate-700 font-bold uppercase tracking-wider text-[9px] mb-1 flex items-center gap-1">
-                  <KeyRound className="w-3 h-3 text-amber-500" /> Student Login PIN
-                </label>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={studentPin}
-                  onChange={(e) => setStudentPin(e.target.value)}
-                  className="w-full bg-white border border-slate-300 rounded px-2.5 py-2 text-xs font-mono font-bold text-blue-900 tracking-widest"
-                />
+                <span className="font-bold block text-blue-900 uppercase text-[10px] tracking-wider">
+                  Student Portal Access & Password:
+                </span>
+                <span>
+                  Students maintain their assigned Registration Number (<strong className="font-mono text-blue-950">{student.regNo}</strong>) as their password for student portal access. No separate password or PIN configuration is required.
+                </span>
               </div>
             </div>
           </div>

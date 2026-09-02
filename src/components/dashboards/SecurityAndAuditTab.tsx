@@ -55,13 +55,19 @@ export const SecurityAndAuditTab: React.FC<SecurityAndAuditTabProps> = ({ school
   const [requirePinForScoreEdit, setRequirePinForScoreEdit] = useState(securitySettings.requirePinForScoreEdit);
   const [requirePinForStudentDeletion, setRequirePinForStudentDeletion] = useState(securitySettings.requirePinForStudentDeletion);
   const [requirePinForPinGeneration, setRequirePinForPinGeneration] = useState(securitySettings.requirePinForPinGeneration);
+  const [requirePinForResultChecking, setRequirePinForResultChecking] = useState(
+    securitySettings.requirePinForResultChecking ?? school.requireResultPin ?? true
+  );
   const [maxFailedAttempts, setMaxFailedAttempts] = useState(securitySettings.maxFailedPinAttempts);
   const [autoSessionTimeout, setAutoSessionTimeout] = useState(securitySettings.autoSessionTimeoutMinutes);
   const [policySavedMsg, setPolicySavedMsg] = useState(false);
 
   const reloadLogs = () => {
+    const freshSettings = storageService.getSecuritySettings(school.id);
+    const freshSchool = storageService.getSchools().find((s) => s.id === school.id) || school;
     setLogs(storageService.getAuditLogs(school.id));
-    setSecuritySettings(storageService.getSecuritySettings(school.id));
+    setSecuritySettings(freshSettings);
+    setRequirePinForResultChecking(freshSettings.requirePinForResultChecking ?? freshSchool.requireResultPin ?? true);
     const currentAdmin = storageService.getUsers().find((u) => u.schoolId === school.id && u.role === 'SCHOOL_ADMIN');
     if (currentAdmin) {
       setAdminUser(currentAdmin);
@@ -155,10 +161,19 @@ export const SecurityAndAuditTab: React.FC<SecurityAndAuditTabProps> = ({ school
       requirePinForScoreEdit,
       requirePinForStudentDeletion,
       requirePinForPinGeneration,
+      requirePinForResultChecking,
       maxFailedPinAttempts: Number(maxFailedAttempts),
       autoSessionTimeoutMinutes: Number(autoSessionTimeout),
     };
     storageService.updateSecuritySettings(updated);
+    // Also sync to school object
+    const freshSchool = storageService.getSchools().find((s) => s.id === school.id);
+    if (freshSchool) {
+      storageService.updateSchool({
+        ...freshSchool,
+        requireResultPin: requirePinForResultChecking,
+      });
+    }
     setSecuritySettings(updated);
     setPolicySavedMsg(true);
     setTimeout(() => setPolicySavedMsg(false), 3000);
@@ -439,6 +454,19 @@ export const SecurityAndAuditTab: React.FC<SecurityAndAuditTabProps> = ({ school
                   type="checkbox"
                   checked={requirePinForPinGeneration}
                   onChange={(e) => setRequirePinForPinGeneration(e.target.checked)}
+                  className="w-4 h-4 text-blue-900 rounded focus:ring-blue-900"
+                />
+              </label>
+
+              <label className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg border border-slate-200 cursor-pointer">
+                <div>
+                  <span className="text-xs font-bold text-slate-900 block">Require Scratch Card PIN for Children Result Checking</span>
+                  <span className="text-[10px] text-slate-500">When active, students & parents must enter a 12-digit PIN code to check results. When disabled, results are accessed directly using Registration Number.</span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={requirePinForResultChecking}
+                  onChange={(e) => setRequirePinForResultChecking(e.target.checked)}
                   className="w-4 h-4 text-blue-900 rounded focus:ring-blue-900"
                 />
               </label>

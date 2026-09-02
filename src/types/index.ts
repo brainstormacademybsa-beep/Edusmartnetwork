@@ -17,6 +17,7 @@ export interface School {
   studentCount?: number;
   teacherCount?: number;
   showPositionOnResult?: boolean;
+  requireResultPin?: boolean; // When true: Scratch card PIN mandatory for result checking. When false: PIN deactivated, students/parents check results with only Reg No.
 }
 
 export interface User {
@@ -277,6 +278,7 @@ export interface SchoolSecuritySettings {
   requirePinForScoreEdit: boolean;
   requirePinForStudentDeletion: boolean;
   requirePinForPinGeneration: boolean;
+  requirePinForResultChecking?: boolean;
   maxFailedPinAttempts: number;
   autoSessionTimeoutMinutes: number;
   lockoutDurationMinutes: number;

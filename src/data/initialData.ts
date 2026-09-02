@@ -27,6 +27,8 @@ export const INITIAL_SCHOOLS: School[] = [
     createdAt: '2025-01-15T09:00:00Z',
     studentCount: 380,
     teacherCount: 28,
+    showPositionOnResult: true,
+    requireResultPin: true,
   },
   {
     id: 'school-apex',
@@ -44,6 +46,8 @@ export const INITIAL_SCHOOLS: School[] = [
     createdAt: '2025-02-01T10:30:00Z',
     studentCount: 250,
     teacherCount: 19,
+    showPositionOnResult: true,
+    requireResultPin: false, // Demo deactivated PIN mode
   },
   {
     id: 'school-stnicholas',
@@ -61,6 +65,8 @@ export const INITIAL_SCHOOLS: School[] = [
     createdAt: '2025-03-10T11:00:00Z',
     studentCount: 410,
     teacherCount: 32,
+    showPositionOnResult: true,
+    requireResultPin: true,
   },
 ];
 
@@ -119,7 +125,7 @@ export const INITIAL_USERS: User[] = [
     password: 'password123',
   },
 
-  // Students (Under 18 - Uses RegNo + Student PIN for login, Parent Contact for notifications)
+  // Students (Under 18 - Uses RegNo as password for login, Parent Contact for notifications)
   {
     id: 'user-student-1',
     schoolId: 'school-crown',
@@ -128,12 +134,12 @@ export const INITIAL_USERS: User[] = [
     role: 'STUDENT',
     parentPhone: '+234 803 888 7766',
     parentWhatsapp: '+234 803 888 7766',
-    studentPin: '1234',
+    studentPin: 'CRA/2026/001',
     className: 'JSS 1A',
     gender: 'Male',
     dob: '2015-05-12',
     avatarUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=100&auto=format&fit=crop&q=80',
-    password: 'password123',
+    password: 'CRA/2026/001',
   },
   {
     id: 'user-student-2',
@@ -143,12 +149,12 @@ export const INITIAL_USERS: User[] = [
     role: 'STUDENT',
     parentPhone: '+234 802 555 4321',
     parentWhatsapp: '+234 802 555 4321',
-    studentPin: '2345',
+    studentPin: 'CRA/2026/002',
     className: 'JSS 1A',
     gender: 'Female',
     dob: '2015-08-20',
     avatarUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&auto=format&fit=crop&q=80',
-    password: 'password123',
+    password: 'CRA/2026/002',
   },
   {
     id: 'user-student-3',
@@ -158,12 +164,12 @@ export const INITIAL_USERS: User[] = [
     role: 'STUDENT',
     parentPhone: '+234 805 777 9988',
     parentWhatsapp: '+234 805 777 9988',
-    studentPin: '3456',
+    studentPin: 'CRA/2026/003',
     className: 'SSS 2 Science',
     gender: 'Female',
     dob: '2012-11-04',
     avatarUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=100&auto=format&fit=crop&q=80',
-    password: 'password123',
+    password: 'CRA/2026/003',
   },
 
   // Parent
