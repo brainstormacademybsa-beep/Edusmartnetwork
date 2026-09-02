@@ -20,7 +20,12 @@ import {
 import { storageService } from '../../services/storageService';
 import { CbtExam, CbtQuestion, School, User } from '../../types';
 import { DEFAULT_SCHOOL_CLASSES } from '../../constants/classes';
-import { downloadCbtQuestionTemplate, parseCbtQuestionsExcel } from '../../utils/excelUtils';
+import {
+  downloadCbtQuestionTemplate,
+  downloadCbtQuestionCsvTemplate,
+  SAMPLE_CBT_QUESTIONS_ROWS,
+  parseCbtQuestionsExcel,
+} from '../../utils/excelUtils';
 import { parseRawTextQuestions } from '../../utils/cbtTextParser';
 
 interface CbtCreatorProps {
@@ -50,7 +55,39 @@ export const CbtCreator: React.FC<CbtCreatorProps> = ({ school, teacher, onSaved
   const [singlePastedText, setSinglePastedText] = useState('');
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [downloadStatus, setDownloadStatus] = useState<string>('');
+  const [copiedTemplateMsg, setCopiedTemplateMsg] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleDownloadTemplate = (format: 'xlsx' | 'csv' = 'xlsx') => {
+    setDownloadStatus(`Preparing ${format.toUpperCase()} template...`);
+    try {
+      if (format === 'csv') {
+        downloadCbtQuestionCsvTemplate('CBT_Questions_Template.csv');
+      } else {
+        downloadCbtQuestionTemplate('CBT_Questions_Template.xlsx');
+      }
+      setTimeout(() => {
+        setDownloadStatus(`✓ ${format.toUpperCase()} template downloaded!`);
+        setTimeout(() => setDownloadStatus(''), 3500);
+      }, 300);
+    } catch (err: any) {
+      console.error('Download error:', err);
+      setDownloadStatus('Download error. Please use Copy Template option below.');
+    }
+  };
+
+  const handleCopyTemplateData = () => {
+    const csvHeader = 'Question Text,Option A,Option B,Option C,Option D,Correct Answer (A/B/C/D),Points (1-100),Explanation (Optional)';
+    const rows = SAMPLE_CBT_QUESTIONS_ROWS.map(
+      (r) =>
+        `"${r['Question Text']}","${r['Option A']}","${r['Option B']}","${r['Option C']}","${r['Option D']}","${r['Correct Answer (A/B/C/D)']}",${r['Points (1-100)']},"${r['Explanation (Optional)']}"`
+    );
+    const content = `${csvHeader}\n${rows.join('\n')}`;
+    navigator.clipboard.writeText(content);
+    setCopiedTemplateMsg(true);
+    setTimeout(() => setCopiedTemplateMsg(false), 3000);
+  };
 
   const [questions, setQuestions] = useState<CbtQuestion[]>([
     {
@@ -549,7 +586,7 @@ Answer: C`}
                 </div>
 
                 <div className="space-y-4">
-                  <div className="p-4 bg-blue-50 border border-blue-100 rounded space-y-3">
+                  <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl space-y-3">
                     <div className="flex items-start gap-3">
                       <AlertCircle className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                       <div className="text-[11px] text-slate-700 leading-relaxed font-medium">
@@ -562,12 +599,48 @@ Answer: C`}
                       </div>
                     </div>
 
+                    {downloadStatus && (
+                      <div className="p-2.5 bg-emerald-100 border border-emerald-300 text-emerald-900 rounded-lg text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                        <Check className="w-4 h-4 text-emerald-700 shrink-0" />
+                        <span>{downloadStatus}</span>
+                      </div>
+                    )}
+
+                    {copiedTemplateMsg && (
+                      <div className="p-2.5 bg-blue-100 border border-blue-300 text-blue-900 rounded-lg text-xs font-bold flex items-center gap-2 animate-fadeIn">
+                        <Check className="w-4 h-4 text-blue-700 shrink-0" />
+                        <span>Template headers & sample data copied to clipboard!</span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        id="btn-download-cbt-xlsx"
+                        onClick={() => handleDownloadTemplate('xlsx')}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-white hover:bg-slate-50 text-blue-900 rounded-lg font-bold transition border border-blue-200 shadow-sm text-[11px] uppercase tracking-wider active:scale-98"
+                      >
+                        <FileDown className="w-4 h-4 text-blue-700 shrink-0" />
+                        <span>Download Template (.xlsx)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        id="btn-download-cbt-csv"
+                        onClick={() => handleDownloadTemplate('csv')}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-white hover:bg-slate-50 text-emerald-800 rounded-lg font-bold transition border border-emerald-200 shadow-sm text-[11px] uppercase tracking-wider active:scale-98"
+                      >
+                        <FileDown className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>Download (.csv) Mobile</span>
+                      </button>
+                    </div>
+
                     <button
                       type="button"
-                      onClick={downloadCbtQuestionTemplate}
-                      className="w-full flex items-center justify-center gap-2 py-2 bg-white hover:bg-slate-50 text-blue-900 rounded font-bold transition border border-blue-200 shadow-sm text-[11px] uppercase tracking-wider"
+                      onClick={handleCopyTemplateData}
+                      className="w-full text-center text-[10px] font-bold text-slate-500 hover:text-blue-900 flex items-center justify-center gap-1 py-1 transition"
                     >
-                      <FileDown className="w-4 h-4" /> Download Template (.xlsx)
+                      <Copy className="w-3 h-3" /> Or Click to Copy Template Headers to Clipboard
                     </button>
                   </div>
 
@@ -578,7 +651,7 @@ Answer: C`}
                     <input
                       type="file"
                       ref={fileInputRef}
-                      accept=".xlsx, .xls"
+                      accept=".xlsx, .xls, .csv, text/csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                       onChange={handleBulkUpload}
                       disabled={isUploading}
                       className="hidden"
@@ -587,7 +660,7 @@ Answer: C`}
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploading}
-                      className="w-full flex flex-col items-center justify-center gap-3 p-10 border-2 border-dashed border-slate-200 rounded bg-slate-50 hover:bg-slate-100 hover:border-blue-300 transition cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 hover:border-blue-300 transition cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {isUploading ? (
                         <div className="flex flex-col items-center gap-2">
@@ -601,7 +674,7 @@ Answer: C`}
                           </div>
                           <div className="text-center">
                             <p className="text-sm font-bold text-slate-900">Click to select file</p>
-                            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-black">Supported: .xlsx, .xls</p>
+                            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-black">Supported: .xlsx, .xls, .csv</p>
                           </div>
                         </>
                       )}
