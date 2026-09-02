@@ -6,25 +6,19 @@ import {
   Phone,
   ShieldCheck,
   CheckCircle2,
-  Copy,
-  Check,
   Send,
   Sparkles,
   ArrowRight,
   AlertCircle,
-  MessageSquare,
-  Lock,
   Building2,
   RefreshCw,
-  Eye,
-  EyeOff,
-  UserCheck,
-  Award,
-  GraduationCap,
-  Users,
+  ExternalLink,
+  Lock,
+  ArrowLeft,
 } from 'lucide-react';
-import { School, User, PasswordResetResult } from '../../types';
+import { School, PasswordResetResult } from '../../types';
 import { storageService } from '../../services/storageService';
+import { authService } from '../../services/authService';
 
 interface PasswordResetModalProps {
   isOpen: boolean;
@@ -35,9 +29,9 @@ interface PasswordResetModalProps {
   onSwitchToLogin?: (
     school: School,
     userRole?: 'admin' | 'teacher' | 'student' | 'parents',
-    identifier?: string,
-    newPassword?: string
+    identifier?: string
   ) => void;
+  onGoogleSignInSuccess?: (user: any) => void;
 }
 
 export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
@@ -47,24 +41,19 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
   initialIdentifier = '',
   onPasswordResetSuccess,
   onSwitchToLogin,
+  onGoogleSignInSuccess,
 }) => {
   const schools = storageService.getSchools();
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>(
     defaultSchool?.id || schools[0]?.id || ''
   );
   const [identifier, setIdentifier] = useState(initialIdentifier);
-  const [channel, setChannel] = useState<'both' | 'email' | 'phone'>('both');
-  const [customPassword, setCustomPassword] = useState('');
-  const [useCustomPassword, setUseCustomPassword] = useState(false);
-
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [error, setError] = useState('');
   const [resetResult, setResetResult] = useState<PasswordResetResult | null>(null);
-
-  const [copied, setCopied] = useState(false);
-  const [showPassword, setShowPassword] = useState(true);
-  const [showDispatchLog, setShowDispatchLog] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   useEffect(() => {
     if (defaultSchool) {
@@ -77,37 +66,26 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
     }
   }, [defaultSchool, initialIdentifier, isOpen]);
 
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (resendCooldown > 0) {
+      timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+    }
+    return () => clearTimeout(timer);
+  }, [resendCooldown]);
+
   if (!isOpen) return null;
 
   const currentSchool =
     schools.find((s) => s.id === selectedSchoolId) || defaultSchool || schools[0];
   const allUsers = storageService.getUsers().filter((u) => u.schoolId === currentSchool?.id);
 
-  // Quick autofill candidates for demo convenience
+  // Quick autofill candidates for convenience
   const sampleAdmin = allUsers.find((u) => u.role === 'SCHOOL_ADMIN');
   const sampleTeacher = allUsers.find((u) => u.role === 'TEACHER');
   const sampleStudent = allUsers.find((u) => u.role === 'STUDENT');
 
-  const maskEmail = (email?: string) => {
-    if (!email) return 'N/A';
-    const parts = email.split('@');
-    if (parts.length !== 2) return email;
-    const name = parts[0];
-    const maskedName =
-      name.length > 2
-        ? name.charAt(0) + '*'.repeat(Math.min(name.length - 2, 5)) + name.charAt(name.length - 1)
-        : name + '***';
-    return `${maskedName}@${parts[1]}`;
-  };
-
-  const maskPhone = (phone?: string) => {
-    if (!phone) return 'N/A';
-    const digits = phone.replace(/\s+/g, '');
-    if (digits.length < 8) return phone;
-    return `${digits.slice(0, 4)} *** **${digits.slice(-2)}`;
-  };
-
-  const handleResetSubmit = (e: React.FormEvent) => {
+  const handleResetSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -117,55 +95,84 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
     }
 
     setIsLoading(true);
-    setLoadingStep('🔍 Looking up registered account in institution directory...');
+    setLoadingStep('Looking up registered account in institution directory...');
 
-    setTimeout(() => {
-      setLoadingStep('🔐 Generating cryptographically secure new credentials...');
-      setTimeout(() => {
-        setLoadingStep('📡 Dispatching new password to registered Email & Telco gateway...');
-        setTimeout(() => {
-          const result = storageService.resetUserPassword(identifier, currentSchool?.id, {
-            preferredChannel: channel,
-            customNewPassword: useCustomPassword && customPassword.trim() ? customPassword.trim() : undefined,
-          });
+    try {
+      await new Promise((r) => setTimeout(r, 400));
+      setLoadingStep('Dispatching password reset instructions to registered email...');
 
-          setIsLoading(false);
-          setLoadingStep('');
+      const result = await authService.sendSecurePasswordReset(identifier, currentSchool?.id);
 
-          if (result.success) {
-            setResetResult(result);
-            if (onPasswordResetSuccess) {
-              onPasswordResetSuccess(result);
-            }
-          } else {
-            setError(result.message || 'Unable to reset password. Please verify the credentials provided.');
-          }
-        }, 350);
-      }, 350);
-    }, 300);
-  };
+      setIsLoading(false);
+      setLoadingStep('');
 
-  const handleCopyPassword = () => {
-    if (resetResult?.newPassword) {
-      navigator.clipboard.writeText(resetResult.newPassword);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      if (result.success) {
+        setResetResult(result);
+        setResendCooldown(45); // 45 seconds anti-spam cooldown
+        if (onPasswordResetSuccess) {
+          onPasswordResetSuccess(result);
+        }
+      } else {
+        setError(result.message || 'Unable to reset password. Please verify the credentials provided.');
+      }
+    } catch (err: any) {
+      setIsLoading(false);
+      setLoadingStep('');
+      setError(err?.message || 'An unexpected error occurred while dispatching the reset email.');
     }
   };
 
-  const handleProceedToLogin = () => {
-    if (!resetResult || !currentSchool) return;
-    const user = resetResult.user;
+  const handleResend = async () => {
+    if (resendCooldown > 0 || !identifier.trim()) return;
+    setIsLoading(true);
+    setLoadingStep('Re-dispatching password reset instructions...');
+    try {
+      const result = await authService.sendSecurePasswordReset(identifier, currentSchool?.id);
+      setIsLoading(false);
+      setLoadingStep('');
+      if (result.success) {
+        setResetResult(result);
+        setResendCooldown(60);
+      }
+    } catch (err: any) {
+      setIsLoading(false);
+      setLoadingStep('');
+      setError(err?.message || 'Failed to re-send instructions.');
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setIsGoogleLoading(true);
+    try {
+      const result = await authService.signInWithGoogle(currentSchool?.id);
+      setIsGoogleLoading(false);
+      if (result.success && result.user) {
+        if (onGoogleSignInSuccess) {
+          onGoogleSignInSuccess(result.user);
+        }
+        onClose();
+      } else {
+        setError(result.message);
+      }
+    } catch (err: any) {
+      setIsGoogleLoading(false);
+      setError(err?.message || 'Google Sign-in encounter an issue.');
+    }
+  };
+
+  const handleReturnToLogin = () => {
+    if (!currentSchool) return;
+    const user = resetResult?.user;
     let roleTab: 'admin' | 'teacher' | 'student' | 'parents' = 'admin';
     if (user?.role === 'TEACHER') roleTab = 'teacher';
     else if (user?.role === 'STUDENT') roleTab = 'student';
     else if (user?.role === 'PARENT') roleTab = 'parents';
 
     const loginId = user?.email || user?.regNo || identifier;
-    const newPass = resetResult.newPassword || '';
 
     if (onSwitchToLogin) {
-      onSwitchToLogin(currentSchool, roleTab, loginId, newPass);
+      onSwitchToLogin(currentSchool, roleTab, loginId);
     }
     onClose();
   };
@@ -174,7 +181,6 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
     setResetResult(null);
     setError('');
     setIsLoading(false);
-    setCopied(false);
   };
 
   return (
@@ -203,14 +209,15 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-black text-slate-950 uppercase tracking-tight">
-                  Password Reset & Recovery
+                  Secure Password Reset
                 </h2>
-                <span className="px-2 py-0.5 bg-amber-100 text-amber-900 text-[9px] font-black uppercase rounded-full border border-amber-200">
-                  Instant Dispatch
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-900 text-[9px] font-black uppercase rounded-full border border-emerald-200 flex items-center gap-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-700" />
+                  Email Only
                 </span>
               </div>
               <p className="text-xs text-slate-500 font-medium">
-                Generate a new password and dispatch it to your registered Email or Phone
+                Reset instructions will be securely dispatched to your registered email address
               </p>
             </div>
           </div>
@@ -268,98 +275,75 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                       setIdentifier(e.target.value);
                       if (error) setError('');
                     }}
-                    placeholder="e.g. admin@crownacademy.edu.ng or 08031234567 or CRA/2026/001"
+                    placeholder="e.g. imosesstephen@gmail.com, admin@crownacademy.edu.ng, or CRA/2026/001"
                     className="w-full pl-10 pr-3 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-none focus:border-blue-900 focus:ring-2 focus:ring-blue-900/20"
                   />
                 </div>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  You can enter your registered staff email, student/parent phone number, or admission number.
-                </p>
-              </div>
-
-              {/* Delivery Channel Options */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Send New Password To:
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setChannel('both')}
-                    className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
-                      channel === 'both'
-                        ? 'bg-blue-900 text-amber-300 border-blue-900 shadow-sm font-bold'
-                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <Sparkles className="w-4 h-4 text-amber-400" />
-                    <span className="text-[10px] font-black uppercase">Email & Phone</span>
-                    <span className="text-[8px] opacity-80">(Recommended)</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setChannel('email')}
-                    className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
-                      channel === 'email'
-                        ? 'bg-blue-900 text-amber-300 border-blue-900 shadow-sm font-bold'
-                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <Mail className="w-4 h-4 text-blue-400" />
-                    <span className="text-[10px] font-black uppercase">Email Only</span>
-                    <span className="text-[8px] opacity-80">Official Inbox</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setChannel('phone')}
-                    className={`p-2.5 rounded-xl border text-center transition flex flex-col items-center justify-center gap-1 ${
-                      channel === 'phone'
-                        ? 'bg-blue-900 text-amber-300 border-blue-900 shadow-sm font-bold'
-                        : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
-                    }`}
-                  >
-                    <Phone className="w-4 h-4 text-emerald-400" />
-                    <span className="text-[10px] font-black uppercase">Phone Only</span>
-                    <span className="text-[8px] opacity-80">SMS / WhatsApp</span>
-                  </button>
+                <div className="mt-1.5 flex items-start gap-1.5 text-[11px] text-slate-500">
+                  <ShieldCheck className="w-3.5 h-3.5 text-blue-900 shrink-0 mt-0.5" />
+                  <span>
+                    For security reasons, password reset links are sent exclusively to your registered email address. Passwords are never revealed on screen.
+                  </span>
                 </div>
               </div>
 
-              {/* Optional Custom Password Toggle */}
-              <div className="pt-1">
-                <button
-                  type="button"
-                  onClick={() => setUseCustomPassword(!useCustomPassword)}
-                  className="text-[11px] font-bold text-blue-900 hover:underline flex items-center gap-1"
-                >
-                  <KeyRound className="w-3 h-3 text-amber-500" />
-                  <span>{useCustomPassword ? 'Use auto-generated password instead' : 'Specify custom new password (Optional)'}</span>
-                </button>
-
-                {useCustomPassword && (
-                  <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1 animate-fadeIn">
-                    <label className="block text-[10px] font-bold text-slate-700 uppercase">
-                      New Password Override:
-                    </label>
-                    <input
-                      type="text"
-                      value={customPassword}
-                      onChange={(e) => setCustomPassword(e.target.value)}
-                      placeholder="e.g. MySecurePass2026#"
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono font-bold text-slate-900 focus:outline-none focus:border-blue-900"
-                    />
+              {/* Google One-Click Alternative Option */}
+              <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                    <div>
+                      <div className="text-xs font-bold text-blue-950">Have a Google Account?</div>
+                      <div className="text-[10px] text-blue-700">Sign in instantly without needing to reset your password</div>
+                    </div>
                   </div>
-                )}
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={isGoogleLoading}
+                    id="btn-google-sign-in-from-reset"
+                    className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-800 font-bold text-[11px] rounded-xl border border-slate-200 shadow-sm transition active:scale-95 flex items-center gap-1.5 shrink-0"
+                  >
+                    {isGoogleLoading ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-900" />
+                    ) : (
+                      <span>Sign in with Google</span>
+                    )}
+                  </button>
+                </div>
               </div>
 
               {/* Quick Autofill Sample Chips */}
               <div className="pt-2 border-t border-slate-100 space-y-1.5">
                 <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">
-                  Quick Demo Test Accounts ({currentSchool?.name}):
+                  Quick Demo Accounts:
                 </span>
                 <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setIdentifier('imosesstephen@gmail.com')}
+                    className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-950 font-medium text-[10px] rounded-lg transition border border-amber-200 flex items-center gap-1"
+                  >
+                    <Mail className="w-3 h-3 text-amber-700" />
+                    <span>imosesstephen@gmail.com</span>
+                  </button>
                   {sampleAdmin && (
                     <button
                       type="button"
@@ -367,27 +351,16 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                       className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-950 font-medium text-[10px] rounded-lg transition border border-blue-200 flex items-center gap-1"
                     >
                       <ShieldCheck className="w-3 h-3 text-blue-700" />
-                      <span>Admin: {sampleAdmin.email}</span>
+                      <span>Admin ({sampleAdmin.email})</span>
                     </button>
                   )}
                   {sampleTeacher && (
                     <button
                       type="button"
                       onClick={() => setIdentifier(sampleTeacher.email || '')}
-                      className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-950 font-medium text-[10px] rounded-lg transition border border-amber-200 flex items-center gap-1"
+                      className="px-2.5 py-1 bg-purple-50 hover:bg-purple-100 text-purple-950 font-medium text-[10px] rounded-lg transition border border-purple-200 flex items-center gap-1"
                     >
-                      <Award className="w-3 h-3 text-amber-700" />
-                      <span>Teacher: {sampleTeacher.email}</span>
-                    </button>
-                  )}
-                  {sampleStudent && (
-                    <button
-                      type="button"
-                      onClick={() => setIdentifier(sampleStudent.regNo || sampleStudent.parentPhone || '')}
-                      className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-950 font-medium text-[10px] rounded-lg transition border border-emerald-200 flex items-center gap-1"
-                    >
-                      <GraduationCap className="w-3 h-3 text-emerald-700" />
-                      <span>Student: {sampleStudent.name} ({sampleStudent.regNo})</span>
+                      <span>Teacher ({sampleTeacher.email})</span>
                     </button>
                   )}
                 </div>
@@ -411,33 +384,32 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                 {isLoading ? (
                   <div className="flex items-center gap-2">
                     <RefreshCw className="w-4 h-4 animate-spin text-amber-400" />
-                    <span>{loadingStep || 'Processing Reset Request...'}</span>
+                    <span>{loadingStep || 'Dispatching Reset Email...'}</span>
                   </div>
                 ) : (
                   <>
                     <Send className="w-4 h-4 text-amber-400" />
-                    <span>Reset & Dispatch New Password</span>
+                    <span>Send Password Reset Email</span>
                   </>
                 )}
               </button>
             </form>
           ) : (
             /* ========================================================================= */
-            /* STEP 2: SUCCESS & CREDENTIAL DISPATCH CONFIRMATION */
+            /* STEP 2: SECURE CONFIRMATION SCREEN (NO PLAINTEXT PASSWORD ON SCREEN) */
             /* ========================================================================= */
             <div className="space-y-5 animate-fadeIn">
               {/* Success Badge Banner */}
               <div className="p-4 bg-emerald-50 border-2 border-emerald-200 rounded-2xl flex items-start gap-3">
-                <div className="p-2 bg-emerald-600 text-white rounded-xl shrink-0 mt-0.5 shadow-sm">
-                  <CheckCircle2 className="w-5 h-5" />
+                <div className="p-2.5 bg-emerald-600 text-white rounded-xl shrink-0 mt-0.5 shadow-sm">
+                  <CheckCircle2 className="w-6 h-6" />
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-emerald-950 uppercase tracking-tight">
-                    Password Reset & Dispatched!
+                    Check Your Registered Inbox
                   </h3>
                   <p className="text-xs text-emerald-800 mt-0.5 leading-relaxed">
-                    A new temporary password has been created and sent to the registered contact address for{' '}
-                    <strong className="font-black text-emerald-950">{resetResult.user?.name}</strong>.
+                    A password reset notification and portal access instructions have been sent to your registered email address.
                   </p>
                 </div>
               </div>
@@ -449,9 +421,7 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                     <img
                       src={
                         resetResult.user?.avatarUrl ||
-                        (resetResult.user?.role === 'STUDENT'
-                          ? 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=100'
-                          : 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100')
+                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100'
                       }
                       alt={resetResult.user?.name}
                       className="w-9 h-9 rounded-full object-cover border border-slate-300 shadow-xs"
@@ -471,166 +441,122 @@ export const PasswordResetModal: React.FC<PasswordResetModalProps> = ({
                 </div>
 
                 {/* Delivery Targets */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  {resetResult.dispatchedToEmail && (
-                    <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-blue-700 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[9px] font-bold text-slate-400 uppercase">
-                          Registered Email
+                <div className="space-y-2">
+                  {resetResult.maskedEmail && (
+                    <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-1.5 bg-blue-50 text-blue-700 rounded-lg">
+                          <Mail className="w-4 h-4" />
                         </div>
-                        <div className="font-mono text-slate-800 text-[11px] font-bold truncate">
-                          {maskEmail(resetResult.dispatchedToEmail)}
+                        <div>
+                          <div className="text-[9px] font-bold text-slate-400 uppercase">
+                            Registered Email (Masked)
+                          </div>
+                          <div className="font-mono text-slate-900 text-xs font-bold">
+                            {resetResult.maskedEmail}
+                          </div>
                         </div>
-                        <span className="inline-flex items-center gap-1 text-[8px] text-emerald-700 font-bold">
-                          ✓ Dispatched via SMTP
-                        </span>
                       </div>
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-md">
+                        ✓ Dispatched
+                      </span>
                     </div>
                   )}
 
-                  {resetResult.dispatchedToPhone && (
-                    <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center gap-2">
-                      <Phone className="w-4 h-4 text-emerald-700 shrink-0" />
-                      <div className="min-w-0">
-                        <div className="text-[9px] font-bold text-slate-400 uppercase">
-                          Registered Phone / SMS
+                  {resetResult.maskedPhone && (
+                    <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg">
+                          <Phone className="w-3.5 h-3.5" />
                         </div>
-                        <div className="font-mono text-slate-800 text-[11px] font-bold truncate">
-                          {maskPhone(resetResult.dispatchedToPhone)}
+                        <div>
+                          <div className="text-[9px] font-bold text-slate-400 uppercase">
+                            Registered Phone
+                          </div>
+                          <div className="font-mono text-slate-900 text-[11px] font-bold">
+                            {resetResult.maskedPhone}
+                          </div>
                         </div>
-                        <span className="inline-flex items-center gap-1 text-[8px] text-emerald-700 font-bold">
-                          ✓ Dispatched via Telco
-                        </span>
                       </div>
+                      <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[9px] font-bold rounded-md">
+                        ✓ SMS Notified
+                      </span>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* New Password Display Box */}
-              <div className="bg-slate-900 text-white p-4 sm:p-5 rounded-2xl shadow-xl space-y-2 border border-slate-800">
-                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  <span className="flex items-center gap-1.5 text-amber-400">
-                    <Lock className="w-3.5 h-3.5" />
-                    <span>New Generated Password</span>
-                  </span>
-                  <span>Keep Confidential</span>
+              {/* Security Protection Notice */}
+              <div className="p-3.5 bg-slate-900 text-slate-200 rounded-2xl text-xs space-y-1.5 border border-slate-800">
+                <div className="flex items-center gap-2 font-bold text-amber-300 text-[11px] uppercase tracking-wider">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span>Strict Security Protection Active</span>
                 </div>
-
-                <div className="flex items-center justify-between gap-3 bg-slate-950 p-3 rounded-xl border border-slate-800">
-                  <div className="font-mono text-base sm:text-lg font-black tracking-wider text-amber-300 select-all">
-                    {showPassword ? resetResult.newPassword : '••••••••••••'}
-                  </div>
-
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="p-1.5 text-slate-400 hover:text-slate-200 hover:bg-slate-800 rounded-lg transition"
-                      title={showPassword ? 'Hide Password' : 'Show Password'}
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={handleCopyPassword}
-                      id="btn-copy-new-password"
-                      className="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-amber-300 font-bold text-xs rounded-lg transition flex items-center gap-1.5 shadow-sm active:scale-95"
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="w-3.5 h-3.5 text-emerald-400" />
-                          <span>Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>Copy</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
+                <p className="text-[11px] text-slate-300 leading-relaxed">
+                  For your institutional security, passwords are never shown on screen. Please open your registered email inbox to retrieve your credentials or click below to sign in with Google.
+                </p>
               </div>
 
-              {/* Direct Dispatch & Interactive Communication Actions */}
-              <div className="space-y-2">
-                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                  Direct Delivery & Notification Actions:
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {resetResult.whatsappUrl && (
-                    <a
-                      href={resetResult.whatsappUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
-                    >
-                      <MessageSquare className="w-4 h-4" />
-                      <span>Send WhatsApp</span>
-                    </a>
-                  )}
+              {/* Quick Actions: Open Mailbox or Google Sign In */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <a
+                  href="https://mail.google.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-3 bg-blue-900 hover:bg-blue-800 text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
+                >
+                  <Mail className="w-4 h-4 text-amber-400" />
+                  <span>Open Gmail Inbox</span>
+                  <ExternalLink className="w-3 h-3 opacity-70" />
+                </a>
 
-                  {resetResult.mailtoUrl && (
-                    <a
-                      href={resetResult.mailtoUrl}
-                      className="p-2.5 bg-blue-900 hover:bg-blue-800 text-amber-300 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
-                    >
-                      <Mail className="w-4 h-4" />
-                      <span>Open Email App</span>
-                    </a>
-                  )}
-                </div>
-              </div>
-
-              {/* Expandable Dispatch Preview & Message Log */}
-              <div>
                 <button
                   type="button"
-                  onClick={() => setShowDispatchLog(!showDispatchLog)}
-                  className="text-[11px] font-bold text-blue-900 hover:underline flex items-center gap-1"
+                  onClick={handleGoogleSignIn}
+                  disabled={isGoogleLoading}
+                  className="p-3 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition active:scale-95"
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                  <span>{showDispatchLog ? 'Hide Message Payload Preview' : 'View Message Dispatch Payload Preview'}</span>
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                    />
+                  </svg>
+                  <span>{isGoogleLoading ? 'Connecting...' : 'Sign in with Google'}</span>
                 </button>
-
-                {showDispatchLog && (
-                  <div className="mt-2 p-3 bg-slate-100 rounded-xl border border-slate-200 text-[11px] font-mono space-y-2 text-slate-800 animate-fadeIn">
-                    <div className="font-bold text-slate-900 text-xs border-b border-slate-200 pb-1 flex items-center justify-between">
-                      <span>Email & SMS Payload:</span>
-                      <span className="text-[9px] text-emerald-700 font-black">STATUS: 200 OK DISPATCHED</span>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-slate-500 text-[10px] font-bold">Subject: {resetResult.emailSubject}</p>
-                      <pre className="whitespace-pre-wrap bg-white p-2.5 rounded-lg border border-slate-200 text-[10px] max-h-36 overflow-y-auto">
-                        {resetResult.emailBody}
-                      </pre>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Primary Action Buttons */}
               <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleProceedToLogin}
-                  id="btn-login-with-new-password"
-                  className="w-full sm:flex-1 py-3 bg-emerald-700 hover:bg-emerald-800 text-white font-black text-xs uppercase tracking-widest rounded-xl transition shadow-lg flex items-center justify-center gap-2 active:scale-98"
+                  onClick={handleReturnToLogin}
+                  id="btn-return-to-portal-login"
+                  className="w-full sm:flex-1 py-3 bg-blue-900 hover:bg-blue-800 text-amber-300 font-black text-xs uppercase tracking-widest rounded-xl transition shadow-lg flex items-center justify-center gap-2 active:scale-98"
                 >
-                  <CheckCircle2 className="w-4 h-4 text-amber-300" />
-                  <span>Log In Now with New Password</span>
-                  <ArrowRight className="w-4 h-4" />
+                  <ArrowLeft className="w-4 h-4" />
+                  <span>Return to Portal Login</span>
                 </button>
 
                 <button
                   type="button"
-                  onClick={handleResetAnother}
-                  className="w-full sm:w-auto px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition"
+                  onClick={handleResend}
+                  disabled={resendCooldown > 0 || isLoading}
+                  className="w-full sm:w-auto px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider rounded-xl transition disabled:opacity-50"
                 >
-                  Reset Another
+                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Email'}
                 </button>
               </div>
             </div>

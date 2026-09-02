@@ -53,9 +53,9 @@ class StorageService {
 
   private init() {
     const version = localStorage.getItem('EDUSMART_VERSION_V2');
-    if (version !== '2.0.3') {
+    if (version !== '2.1.0') {
       localStorage.clear();
-      localStorage.setItem('EDUSMART_VERSION_V2', '2.0.3');
+      localStorage.setItem('EDUSMART_VERSION_V2', '2.1.0');
       this.initDefaults(true);
     }
     if (!localStorage.getItem(STORAGE_KEYS.SCHOOLS)) {

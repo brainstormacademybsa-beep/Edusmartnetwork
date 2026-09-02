@@ -260,7 +260,10 @@ export interface PasswordResetResult {
   message: string;
   user?: User;
   school?: School;
+  maskedEmail?: string;
+  maskedPhone?: string;
   newPassword?: string;
+  firebaseEmailSent?: boolean;
   dispatchedToEmail?: string;
   dispatchedToPhone?: string;
   deliveryChannels?: ('EMAIL' | 'SMS' | 'WHATSAPP')[];

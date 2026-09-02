@@ -83,6 +83,17 @@ export const INITIAL_USERS: User[] = [
     avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80',
     password: 'password123',
   },
+  {
+    id: 'user-super-stephen',
+    schoolId: 'super',
+    regNo: 'SUPER02',
+    name: 'Moses Stephen',
+    email: 'imosesstephen@gmail.com',
+    role: 'SUPER_ADMIN',
+    phone: '+234 803 000 0000',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+    password: 'password123',
+  },
 
   // Crown Academy School Admin
   {
@@ -94,6 +105,17 @@ export const INITIAL_USERS: User[] = [
     role: 'SCHOOL_ADMIN',
     phone: '+234 803 111 2233',
     avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=100&auto=format&fit=crop&q=80',
+    password: 'password123',
+  },
+  {
+    id: 'user-crown-admin-stephen',
+    schoolId: 'school-crown',
+    regNo: 'ADM/CRA/02',
+    name: 'Moses Stephen',
+    email: 'imosesstephen@gmail.com',
+    role: 'SCHOOL_ADMIN',
+    phone: '+234 803 000 0000',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
     password: 'password123',
   },
 
