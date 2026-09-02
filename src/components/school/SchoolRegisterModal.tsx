@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Building2, Upload, Sparkles, CheckCircle2, Globe, Palette } from 'lucide-react';
+import { X, Building2, Upload, Sparkles, CheckCircle2, Globe, Palette, Copy, Check, ExternalLink } from 'lucide-react';
 import { storageService } from '../../services/storageService';
 import { School } from '../../types';
 
@@ -27,7 +27,8 @@ export const SchoolRegisterModal: React.FC<SchoolRegisterModalProps> = ({
   const [adminName, setAdminName] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [motto, setMotto] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
+  const [createdSchool, setCreatedSchool] = useState<School | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const handleNameChange = (val: string) => {
     setName(val);
@@ -74,11 +75,26 @@ export const SchoolRegisterModal: React.FC<SchoolRegisterModalProps> = ({
       }
     );
 
-    setSuccessMsg(`School "${newSch.name}" registered successfully! Subdomain created: ${newSch.subdomain}.edusmartportal.com`);
-    setTimeout(() => {
-      onRegistered(newSch);
+    setCreatedSchool(newSch);
+  };
+
+  const getDirectUrl = (sub: string) => {
+    return `${window.location.origin}${window.location.pathname}?school=${sub}`;
+  };
+
+  const handleCopyLink = () => {
+    if (!createdSchool) return;
+    const url = getDirectUrl(createdSchool.subdomain);
+    navigator.clipboard.writeText(url);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 3000);
+  };
+
+  const handleEnterSchoolPortal = () => {
+    if (createdSchool) {
+      onRegistered(createdSchool);
       onClose();
-    }, 1500);
+    }
   };
 
   return (
@@ -98,16 +114,66 @@ export const SchoolRegisterModal: React.FC<SchoolRegisterModalProps> = ({
           <div>
             <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Register Your School on EduSmart</h2>
             <p className="text-xs text-slate-500">
-              Create a custom branded portal with dedicated subdomain, colors, logo, and staff management.
+              Create a custom branded portal with dedicated subdomain, direct shareable portal URL, and staff management.
             </p>
           </div>
         </div>
 
-        {successMsg ? (
-          <div className="p-6 bg-emerald-50 border border-emerald-200 rounded text-center space-y-3">
-            <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto animate-bounce" />
-            <h3 className="text-lg font-bold text-emerald-800">{successMsg}</h3>
-            <p className="text-xs text-slate-600">Redirecting to your new school portal...</p>
+        {createdSchool ? (
+          <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-4">
+            <CheckCircle2 className="w-14 h-14 text-emerald-600 mx-auto" />
+            <div className="space-y-1">
+              <h3 className="text-xl font-black text-emerald-950 uppercase">{createdSchool.name} Registered Successfully!</h3>
+              <p className="text-xs text-slate-600">Your school portal is live and ready for staff, students, and parents.</p>
+            </div>
+
+            {/* Direct Portal Link Box */}
+            <div className="bg-white p-4 rounded-xl border border-emerald-300 text-left space-y-2 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Direct Shareable School Portal URL:</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {createdSchool.subdomain}.edusmartportal.com
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                <input
+                  type="text"
+                  readOnly
+                  value={getDirectUrl(createdSchool.subdomain)}
+                  className="w-full bg-transparent text-xs font-mono text-blue-900 font-bold outline-none"
+                />
+                <button
+                  type="button"
+                  onClick={handleCopyLink}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1 shrink-0 ${
+                    copiedLink
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-blue-900 hover:bg-blue-800 text-amber-300'
+                  }`}
+                >
+                  {copiedLink ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
+                </button>
+              </div>
+
+              <p className="text-[11px] text-slate-500">
+                Share this direct link on WhatsApp, SMS, or email so parents and students can enter {createdSchool.name}'s portal directly.
+              </p>
+            </div>
+
+            <div className="pt-2 flex justify-center gap-3">
+              <button
+                type="button"
+                onClick={handleEnterSchoolPortal}
+                className="px-6 py-2.5 bg-blue-900 hover:bg-blue-800 text-amber-300 font-black text-xs uppercase tracking-widest rounded-xl transition shadow-lg flex items-center gap-2"
+              >
+                <span>Enter Admin Dashboard Now →</span>
+              </button>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4 text-sm">

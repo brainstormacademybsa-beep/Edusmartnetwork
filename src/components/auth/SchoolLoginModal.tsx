@@ -15,6 +15,9 @@ import {
   UserCheck,
   ChevronRight,
   Sparkles,
+  Copy,
+  Check,
+  Globe,
 } from 'lucide-react';
 import { School, User } from '../../types';
 import { storageService } from '../../services/storageService';
@@ -45,6 +48,7 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
 
   // Active role tab: 'admin', 'teacher', 'student', 'parents'
   const [activeTab, setActiveTab] = useState<SchoolLoginRoleTab>(defaultRoleTab);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   // 1. Admin Form State (Email + Password)
   const [adminEmail, setAdminEmail] = useState('');
@@ -76,6 +80,12 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
   const sampleStudents = allSchoolUsers.filter((u) => u.role === 'STUDENT');
 
   useEffect(() => {
+    if (defaultRoleTab) {
+      setActiveTab(defaultRoleTab);
+    }
+  }, [defaultRoleTab, isOpen]);
+
+  useEffect(() => {
     setError('');
     setIsLoading(false);
     setShowAdminPassword(false);
@@ -97,6 +107,13 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
       setChildAdmissionNo(sampleStudents[0].regNo);
     }
   }, [isOpen, school?.id]);
+
+  const handleCopyDirectLink = () => {
+    const directUrl = `${window.location.origin}${window.location.pathname}?school=${school.subdomain}`;
+    navigator.clipboard.writeText(directUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 3000);
+  };
 
   // Handle Admin Login
   const handleAdminLogin = (e: React.FormEvent) => {
@@ -219,23 +236,36 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
         <div className="bg-gradient-to-br from-blue-950 via-slate-900 to-indigo-950 text-white p-5 sm:p-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 rounded-full blur-2xl -mr-12 -mt-12"></div>
 
-          <div className="flex items-center gap-3.5 relative z-10">
-            <img
-              src={school.logo}
-              alt={school.name}
-              className="w-14 h-14 rounded-2xl object-cover border-2 border-white/20 shadow-xl bg-white shrink-0"
-            />
-            <div className="min-w-0 pr-8">
-              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full border border-emerald-500/30 text-[9px] font-black uppercase tracking-widest mb-1">
-                <ShieldCheck className="w-3 h-3 text-emerald-400" />
-                <span>Unified School Portal</span>
+          <div className="flex items-center justify-between gap-3 relative z-10">
+            <div className="flex items-center gap-3.5 min-w-0 pr-6">
+              <img
+                src={school.logo}
+                alt={school.name}
+                className="w-14 h-14 rounded-2xl object-cover border-2 border-white/20 shadow-xl bg-white shrink-0"
+              />
+              <div className="min-w-0">
+                <div className="inline-flex items-center gap-1 px-2.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full border border-emerald-500/30 text-[9px] font-black uppercase tracking-widest mb-1">
+                  <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                  <span>Unified School Portal</span>
+                </div>
+                <h2 className="text-base sm:text-lg font-black text-white uppercase tracking-tight truncate leading-tight">
+                  {school.name}
+                </h2>
+                <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                  <span className="text-[10px] text-slate-300 font-mono">
+                    {school.subdomain}.edusmartportal.com
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCopyDirectLink}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-white/10 hover:bg-white/20 text-amber-300 text-[9px] font-bold rounded-md transition border border-white/10"
+                    title="Copy direct shareable link (?school=...)"
+                  >
+                    {copiedLink ? <Check className="w-2.5 h-2.5 text-emerald-400" /> : <Copy className="w-2.5 h-2.5" />}
+                    <span>{copiedLink ? 'Link Copied!' : 'Copy Direct Link'}</span>
+                  </button>
+                </div>
               </div>
-              <h2 className="text-base sm:text-lg font-black text-white uppercase tracking-tight truncate leading-tight">
-                {school.name}
-              </h2>
-              <p className="text-[10px] text-slate-300 font-mono truncate">
-                {school.subdomain}.edusmartportal.com
-              </p>
             </div>
           </div>
         </div>

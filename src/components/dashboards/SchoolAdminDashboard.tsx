@@ -27,6 +27,9 @@ import {
   HeartHandshake,
   Edit3,
   ShieldCheck,
+  Globe,
+  Copy,
+  Check,
 } from 'lucide-react';
 import { storageService } from '../../services/storageService';
 import { School, User, FeeSchedule, FeePayment, AdmissionApplication, ResultPin, CbtExam } from '../../types';
@@ -73,6 +76,7 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
   const [secondaryColor, setSecondaryColor] = useState(school.secondaryColor);
   const [showPositionOnResult, setShowPositionOnResult] = useState(school.showPositionOnResult ?? true);
   const [brandingSuccess, setBrandingSuccess] = useState('');
+  const [copiedPortalLink, setCopiedPortalLink] = useState(false);
 
   // Fee State
   const [selectedFeeReceipt, setSelectedFeeReceipt] = useState<FeePayment | null>(null);
@@ -675,6 +679,56 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
             <p className="text-xs text-slate-500">
               Customize your School Name, Logo Upload, Theme Colors, Address, Motto, and Result Position settings.
             </p>
+          </div>
+
+          {/* Shareable Portal Link Banner */}
+          <div className="bg-gradient-to-r from-blue-950 via-slate-900 to-indigo-950 text-white p-4 sm:p-5 rounded-2xl border border-blue-800/80 shadow-md space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-300">
+                    Direct Shareable School Portal URL
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 bg-emerald-500/20 text-emerald-300 rounded-full font-bold border border-emerald-500/30">
+                    Instant Access
+                  </span>
+                </div>
+                <p className="text-[11px] text-blue-200">
+                  Share this exact web link with parents, students, and teachers. When opened, it automatically directs to <strong>{school.name}</strong>'s login screen.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  const directUrl = `${window.location.origin}${window.location.pathname}?school=${school.subdomain}`;
+                  navigator.clipboard.writeText(directUrl);
+                  setCopiedPortalLink(true);
+                  setTimeout(() => setCopiedPortalLink(false), 3000);
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition shadow-lg flex items-center gap-2 ${
+                  copiedPortalLink
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-amber-400 hover:bg-amber-300 text-slate-950'
+                }`}
+              >
+                {copiedPortalLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedPortalLink ? 'Link Copied!' : 'Copy Direct Portal Link'}</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 bg-slate-900/90 p-2.5 rounded-xl border border-blue-500/30">
+              <input
+                type="text"
+                readOnly
+                value={`${window.location.origin}${window.location.pathname}?school=${school.subdomain}`}
+                className="w-full bg-transparent text-xs font-mono text-amber-300 font-bold outline-none"
+              />
+              <span className="text-[10px] text-slate-400 font-mono shrink-0 hidden sm:inline">
+                Subdomain: {school.subdomain}.edusmartportal.com
+              </span>
+            </div>
           </div>
 
           {brandingSuccess && (
