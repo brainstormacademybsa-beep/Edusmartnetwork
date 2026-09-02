@@ -1,0 +1,6 @@
+{
+  "name": "EduSmart Portal",
+  "description": "Multi-school management platform with CBT exams, results processing, fees management, online admissions, and role-based portals for Super Admin, School Admin, Teachers, Students, and Parents.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

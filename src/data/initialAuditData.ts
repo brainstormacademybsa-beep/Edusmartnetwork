@@ -1,0 +1,48 @@
+import { AuditLog } from '../types';
+
+export const INITIAL_AUDIT_LOGS: AuditLog[] = [
+  {
+    id: 'log-1',
+    schoolId: 'sch-1',
+    actorId: 'user-admin-1',
+    actorName: 'Grace High Admin',
+    actorRole: 'SCHOOL_ADMIN',
+    action: 'SETTINGS_UPDATE',
+    details: 'Configured academic term dates and result position display settings.',
+    timestamp: new Date(Date.now() - 3600000 * 24).toISOString(),
+    severity: 'INFO',
+  },
+  {
+    id: 'log-2',
+    schoolId: 'sch-1',
+    actorId: 'user-admin-1',
+    actorName: 'Grace High Admin',
+    actorRole: 'SCHOOL_ADMIN',
+    action: 'PIN_GENERATE',
+    details: 'Generated batch of 100 scratch card result verification PINs for First Term 2025/2026.',
+    timestamp: new Date(Date.now() - 3600000 * 18).toISOString(),
+    severity: 'INFO',
+  },
+  {
+    id: 'log-3',
+    schoolId: 'sch-1',
+    actorId: 'user-tch-1',
+    actorName: 'Mr. David Adeleke',
+    actorRole: 'TEACHER',
+    action: 'RESULT_UPLOAD',
+    details: 'Uploaded continuous assessment (CA) and terminal exam scores for JSS 1 Mathematics.',
+    timestamp: new Date(Date.now() - 3600000 * 6).toISOString(),
+    severity: 'INFO',
+  },
+  {
+    id: 'log-4',
+    schoolId: 'sch-1',
+    actorId: 'user-admin-1',
+    actorName: 'Grace High Admin',
+    actorRole: 'SCHOOL_ADMIN',
+    action: 'SECURITY_PIN_CHANGE',
+    details: 'Updated school master security PIN and enabled score edit protection.',
+    timestamp: new Date(Date.now() - 3600000 * 2).toISOString(),
+    severity: 'WARNING',
+  },
+];
