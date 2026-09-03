@@ -30,12 +30,14 @@ import {
   Globe,
   Copy,
   Check,
+  Award,
 } from 'lucide-react';
 import { storageService } from '../../services/storageService';
-import { School, User, FeeSchedule, FeePayment, AdmissionApplication, ResultPin, CbtExam } from '../../types';
+import { School, User, FeeSchedule, FeePayment, AdmissionApplication, ResultPin, CbtExam, CbtAttempt } from '../../types';
 import { DEFAULT_SCHOOL_CLASSES } from '../../constants/classes';
 import { NIGERIAN_STATES_AND_LGAS, calculateAgeFromDob } from '../../constants/locations';
 import { CbtCreator } from '../cbt/CbtCreator';
+import { CbtAttemptDetailsModal } from '../cbt/CbtAttemptDetailsModal';
 import { FeeReceiptPrint } from '../fees/FeeReceiptPrint';
 import { AdmissionSlipPrint } from '../admissions/AdmissionSlipPrint';
 import { OnlineAdmissionForm } from '../admissions/OnlineAdmissionForm';
@@ -66,6 +68,14 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
   const [newUserAssignedClasses, setNewUserAssignedClasses] = useState<string[]>(['JSS 1A']);
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
   const [resetUserTarget, setResetUserTarget] = useState<User | null>(null);
+
+  // CBT State
+  const [cbtSubTab, setCbtSubTab] = useState<'scores' | 'exams'>('scores');
+  const [cbtClassFilter, setCbtClassFilter] = useState('ALL');
+  const [cbtExamFilter, setCbtExamFilter] = useState('ALL');
+  const [cbtSearchQuery, setCbtSearchQuery] = useState('');
+  const [selectedCbtAttemptForAdminModal, setSelectedCbtAttemptForAdminModal] = useState<CbtAttempt | null>(null);
+  const [selectedCbtExamForAdminModal, setSelectedCbtExamForAdminModal] = useState<CbtExam | null>(null);
 
   // School Branding State
   const [schoolName, setSchoolName] = useState(school.name);
@@ -145,6 +155,13 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
   const [saveMsg, setSaveMsg] = useState('');
   const [excelSuccessMsg, setExcelSuccessMsg] = useState('');
   const [parsedExcelRows, setParsedExcelRows] = useState<ParsedExcelResult[]>([]);
+  const [, setDataVersion] = useState(0);
+
+  useEffect(() => {
+    return storageService.subscribe(() => {
+      setDataVersion((v) => v + 1);
+    });
+  }, []);
 
   const feeSchedules = storageService.getFeeSchedules(school.id);
   const feePayments = storageService.getFeePayments(school.id);
@@ -152,6 +169,7 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
   const users = storageService.getUsers().filter((u) => u.schoolId === school.id);
   const pins = storageService.getPins(school.id);
   const cbtExams = storageService.getCbtExams(school.id);
+  const cbtAttempts = storageService.getCbtAttempts(school.id);
 
   // Save Branding
   const handleSaveBranding = (e: React.FormEvent) => {
@@ -674,7 +692,12 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
               activeTab === 'cbt' ? 'bg-amber-500 text-slate-950 shadow-lg scale-105' : 'text-blue-100 hover:text-white hover:bg-blue-800'
             }`}
           >
-            <FileQuestion className="w-3.5 h-3.5" /> CBT
+            <FileQuestion className="w-3.5 h-3.5" /> CBT & Test Scores
+            {cbtAttempts.length > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-500 text-slate-950 font-black">
+                {cbtAttempts.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -2055,72 +2078,348 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
         </div>
       )}
 
-      {/* TAB 6: CBT EXAMS MANAGEMENT */}
+      {/* TAB 6: CBT & TEST SCORES MANAGEMENT */}
       {activeTab === 'cbt' && (
-        <div className="bg-white border border-slate-200 rounded p-6 shadow-sm space-y-4 text-xs">
-          <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+        <div className="bg-white border border-slate-200 rounded p-6 shadow-sm space-y-6 text-xs">
+          {/* Header & Subtabs */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>
-              <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <FileQuestion className="w-5 h-5 text-amber-500" />
-                <span>CBT Computer Based Test Management</span>
+              <h2 className="text-xl font-bold text-slate-900 uppercase tracking-tight flex items-center gap-2">
+                <FileQuestion className="w-6 h-6 text-amber-500" />
+                <span>CBT Online Examination & Test Scores</span>
               </h2>
-              <p className="text-xs text-slate-500">Create and manage online exams, set durations, and add multiple-choice questions.</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Inspect live student exam submissions, review student answer sheets, or manage question banks.
+              </p>
             </div>
 
-            <button
-              onClick={() => setIsCreatingCbt(true)}
-              className="px-4 py-2 bg-blue-900 hover:bg-blue-800 text-amber-300 font-bold uppercase tracking-wider rounded text-xs shadow-sm flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" /> Create New CBT Exam
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="bg-slate-100 p-1 rounded border border-slate-200 flex items-center gap-1">
+                <button
+                  onClick={() => setCbtSubTab('scores')}
+                  className={`px-3 py-1.5 rounded font-bold uppercase tracking-wider text-[11px] transition flex items-center gap-1.5 ${
+                    cbtSubTab === 'scores' ? 'bg-blue-900 text-amber-300 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Award className="w-3.5 h-3.5" /> Student Scores ({cbtAttempts.length})
+                </button>
+                <button
+                  onClick={() => setCbtSubTab('exams')}
+                  className={`px-3 py-1.5 rounded font-bold uppercase tracking-wider text-[11px] transition flex items-center gap-1.5 ${
+                    cbtSubTab === 'exams' ? 'bg-blue-900 text-amber-300 shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <FileQuestion className="w-3.5 h-3.5" /> Exam Bank ({cbtExams.length})
+                </button>
+              </div>
+
+              <button
+                onClick={() => setIsCreatingCbt(true)}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black uppercase tracking-wider rounded text-xs shadow-xs flex items-center gap-2 transition"
+              >
+                <Plus className="w-4 h-4" /> Create New CBT Exam
+              </button>
+            </div>
           </div>
 
-          {cbtExams.length === 0 ? (
-            <div className="p-12 text-center bg-slate-50 border border-slate-200 rounded space-y-3">
-              <FileQuestion className="w-12 h-12 text-slate-300 mx-auto" />
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-slate-700">No CBT Exams Created Yet</p>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                  Start by clicking the "Create New CBT Exam" button to define your first online test for students.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {cbtExams.map((exam) => (
-                <div key={exam.id} className="p-4 bg-slate-50 rounded border border-slate-200 space-y-3 shadow-sm hover:shadow-md transition">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-bold text-slate-900 uppercase tracking-tight text-sm leading-tight">{exam.title}</h4>
-                      <div className="text-[10px] text-blue-900 font-bold uppercase tracking-widest mt-1">{exam.subject} • {exam.className}</div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-[10px] font-semibold text-slate-600">
-                    <div className="bg-white p-2 rounded border border-slate-200 flex items-center gap-1.5">
-                      <Sparkles className="w-3 h-3 text-amber-500" /> {exam.questions.length} Questions
-                    </div>
-                    <div className="bg-white p-2 rounded border border-slate-200 flex items-center gap-1.5">
-                      <Settings className="w-3 h-3 text-blue-500" /> {exam.durationMinutes} Minutes
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex items-center justify-between border-t border-slate-200 mt-2">
-                    <span className="text-[9px] text-slate-400 font-mono">ID: {exam.id.slice(-8)}</span>
-                    <button
-                      onClick={() => {
-                        if (confirm('Are you sure you want to delete this CBT exam?')) {
-                          storageService.deleteCbtExam(exam.id);
-                          window.location.reload();
-                        }
-                      }}
-                      className="text-red-500 hover:text-red-700 font-bold uppercase text-[9px]"
-                    >
-                      Delete Exam
-                    </button>
+          {/* SUBTAB 1: STUDENT CBT TEST SCORES */}
+          {cbtSubTab === 'scores' && (
+            <div className="space-y-4">
+              {/* Summary Metrics */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 bg-slate-50 rounded border border-slate-200">
+                  <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total Submissions</div>
+                  <div className="text-xl font-black text-slate-900 font-mono mt-0.5">{cbtAttempts.length}</div>
+                </div>
+                <div className="p-3.5 bg-emerald-50/60 rounded border border-emerald-200">
+                  <div className="text-[10px] uppercase font-bold text-emerald-800 tracking-wider">Passed Submissions</div>
+                  <div className="text-xl font-black text-emerald-700 font-mono mt-0.5">
+                    {cbtAttempts.filter((a) => a.isPassed).length}
                   </div>
                 </div>
-              ))}
+                <div className="p-3.5 bg-blue-50/60 rounded border border-blue-200">
+                  <div className="text-[10px] uppercase font-bold text-blue-800 tracking-wider">Pass Rate</div>
+                  <div className="text-xl font-black text-blue-900 font-mono mt-0.5">
+                    {cbtAttempts.length > 0
+                      ? `${Math.round((cbtAttempts.filter((a) => a.isPassed).length / cbtAttempts.length) * 100)}%`
+                      : '0%'}
+                  </div>
+                </div>
+                <div className="p-3.5 bg-amber-50/60 rounded border border-amber-200">
+                  <div className="text-[10px] uppercase font-bold text-amber-800 tracking-wider">Avg Percentage</div>
+                  <div className="text-xl font-black text-amber-800 font-mono mt-0.5">
+                    {cbtAttempts.length > 0
+                      ? `${Math.round(cbtAttempts.reduce((acc, a) => acc + a.percentage, 0) / cbtAttempts.length)}%`
+                      : '0%'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters Bar */}
+              <div className="bg-slate-50 p-4 rounded border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      Search Student / Reg No
+                    </label>
+                    <div className="relative">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
+                      <input
+                        type="text"
+                        value={cbtSearchQuery}
+                        onChange={(e) => setCbtSearchQuery(e.target.value)}
+                        placeholder="e.g. Tobi, CRA/2026/001..."
+                        className="bg-white border border-slate-300 rounded pl-8 pr-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-900 w-52 shadow-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      Filter Class
+                    </label>
+                    <select
+                      value={cbtClassFilter}
+                      onChange={(e) => setCbtClassFilter(e.target.value)}
+                      className="bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-900 shadow-xs"
+                    >
+                      <option value="ALL">All Classes</option>
+                      {DEFAULT_SCHOOL_CLASSES.flatMap((g) => g.classes).map((cls) => (
+                        <option key={cls} value={cls}>
+                          {cls}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                      Filter Exam
+                    </label>
+                    <select
+                      value={cbtExamFilter}
+                      onChange={(e) => setCbtExamFilter(e.target.value)}
+                      className="bg-white border border-slate-300 rounded px-2.5 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-900 shadow-xs max-w-[220px]"
+                    >
+                      <option value="ALL">All Exams</option>
+                      {cbtExams.map((ex) => (
+                        <option key={ex.id} value={ex.id}>
+                          {ex.title} ({ex.subject})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-4 sm:pt-0">
+                  <button
+                    onClick={() => {
+                      setCbtSearchQuery('');
+                      setCbtClassFilter('ALL');
+                      setCbtExamFilter('ALL');
+                    }}
+                    className="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold uppercase rounded text-[10px] transition"
+                  >
+                    Reset Filters
+                  </button>
+                  <PrintButton label="Print CBT Scores" />
+                </div>
+              </div>
+
+              {/* CBT Scores Table */}
+              {cbtAttempts.length === 0 ? (
+                <div className="p-12 text-center bg-slate-50 border border-slate-200 rounded space-y-2">
+                  <Award className="w-10 h-10 text-slate-300 mx-auto" />
+                  <p className="text-sm font-bold text-slate-700">No CBT Submissions Yet</p>
+                  <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                    When students take online CBT exams, their graded answers, scores, and completion times will automatically appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto border border-slate-200 rounded">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 uppercase text-[10px] font-bold tracking-wider">
+                        <th className="p-3">Student Name & Reg No</th>
+                        <th className="p-3">Class</th>
+                        <th className="p-3">Exam Title & Subject</th>
+                        <th className="p-3 text-center">Score</th>
+                        <th className="p-3 text-center">Percentage</th>
+                        <th className="p-3 text-center">Status</th>
+                        <th className="p-3">Date Submitted</th>
+                        <th className="p-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {cbtAttempts
+                        .filter((att) => {
+                          const exam = cbtExams.find((e) => e.id === att.examId);
+                          const studentUser = users.find((u) => u.regNo === att.studentRegNo);
+                          const studentClass = studentUser?.className || exam?.className || 'General';
+
+                          const matchesQuery =
+                            !cbtSearchQuery ||
+                            att.studentName.toLowerCase().includes(cbtSearchQuery.toLowerCase()) ||
+                            att.studentRegNo.toLowerCase().includes(cbtSearchQuery.toLowerCase()) ||
+                            att.examTitle.toLowerCase().includes(cbtSearchQuery.toLowerCase());
+
+                          const matchesClass = cbtClassFilter === 'ALL' || studentClass === cbtClassFilter;
+                          const matchesExam = cbtExamFilter === 'ALL' || att.examId === cbtExamFilter;
+
+                          return matchesQuery && matchesClass && matchesExam;
+                        })
+                        .map((att) => {
+                          const exam = cbtExams.find((e) => e.id === att.examId);
+                          const studentUser = users.find((u) => u.regNo === att.studentRegNo);
+                          const studentClass = studentUser?.className || exam?.className || 'General';
+
+                          return (
+                            <tr key={att.id} className="hover:bg-slate-50">
+                              <td className="p-3">
+                                <div className="font-bold text-slate-900 uppercase">{att.studentName}</div>
+                                <div className="text-[10px] text-slate-500 font-mono">{att.studentRegNo}</div>
+                              </td>
+
+                              <td className="p-3 font-semibold text-slate-800">
+                                <span className="px-2 py-0.5 bg-slate-100 rounded text-[10px] font-bold text-slate-700">
+                                  {studentClass}
+                                </span>
+                              </td>
+
+                              <td className="p-3">
+                                <div className="font-bold text-slate-900">{att.examTitle}</div>
+                                <div className="text-[10px] text-blue-800 font-semibold">{exam?.subject || 'Subject'}</div>
+                              </td>
+
+                              <td className="p-3 text-center font-mono font-black text-blue-900">
+                                {att.score} / {att.maxScore}
+                              </td>
+
+                              <td className="p-3 text-center font-mono font-black">
+                                <span
+                                  className={
+                                    att.percentage >= 50 ? 'text-emerald-700' : 'text-red-600'
+                                  }
+                                >
+                                  {att.percentage}%
+                                </span>
+                              </td>
+
+                              <td className="p-3 text-center">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                                    att.isPassed
+                                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                                      : 'bg-red-100 text-red-800 border border-red-300'
+                                  }`}
+                                >
+                                  {att.isPassed ? 'PASS' : 'FAIL'}
+                                </span>
+                              </td>
+
+                              <td className="p-3 text-[10px] text-slate-500 whitespace-nowrap">
+                                {new Date(att.submittedAt).toLocaleDateString()} at{' '}
+                                {new Date(att.submittedAt).toLocaleTimeString([], {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </td>
+
+                              <td className="p-3 text-right">
+                                <button
+                                  onClick={() => {
+                                    setSelectedCbtAttemptForAdminModal(att);
+                                    setSelectedCbtExamForAdminModal(exam || null);
+                                  }}
+                                  className="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-amber-300 font-bold uppercase tracking-wider rounded text-[10px] shadow-xs transition inline-flex items-center gap-1.5"
+                                  title="View full questions, candidate's answers, correct answers and explanations"
+                                >
+                                  <Eye className="w-3.5 h-3.5" /> View Answers
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* SUBTAB 2: CBT EXAM BANK */}
+          {cbtSubTab === 'exams' && (
+            <div className="space-y-4">
+              {cbtExams.length === 0 ? (
+                <div className="p-12 text-center bg-slate-50 border border-slate-200 rounded space-y-3">
+                  <FileQuestion className="w-12 h-12 text-slate-300 mx-auto" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-slate-700">No CBT Exams Created Yet</p>
+                    <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                      Start by clicking the "Create New CBT Exam" button to define your first online test for students.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {cbtExams.map((exam) => {
+                    const examAttempts = cbtAttempts.filter((a) => a.examId === exam.id);
+                    return (
+                      <div
+                        key={exam.id}
+                        className="p-4 bg-slate-50 rounded border border-slate-200 space-y-3 shadow-xs hover:shadow-sm transition"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <h4 className="font-bold text-slate-900 uppercase tracking-tight text-sm leading-tight">
+                              {exam.title}
+                            </h4>
+                            <div className="text-[10px] text-blue-900 font-bold uppercase tracking-widest mt-1">
+                              {exam.subject} • {exam.className}
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 bg-blue-100 text-blue-950 font-bold text-[9px] rounded-full uppercase">
+                            {examAttempts.length} Submissions
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-[10px] font-semibold text-slate-600">
+                          <div className="bg-white p-2 rounded border border-slate-200 flex items-center gap-1.5">
+                            <Sparkles className="w-3 h-3 text-amber-500" /> {exam.questions.length} Questions
+                          </div>
+                          <div className="bg-white p-2 rounded border border-slate-200 flex items-center gap-1.5">
+                            <Settings className="w-3 h-3 text-blue-500" /> {exam.durationMinutes} Minutes
+                          </div>
+                        </div>
+
+                        <div className="pt-2 flex items-center justify-between border-t border-slate-200 mt-2">
+                          <button
+                            onClick={() => {
+                              setCbtExamFilter(exam.id);
+                              setCbtSubTab('scores');
+                            }}
+                            className="text-blue-900 hover:text-blue-700 font-bold uppercase text-[10px] flex items-center gap-1"
+                          >
+                            <Eye className="w-3 h-3" /> View {examAttempts.length} Scores
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              if (confirm('Are you sure you want to delete this CBT exam?')) {
+                                storageService.deleteCbtExam(exam.id);
+                                window.location.reload();
+                              }
+                            }}
+                            className="text-red-500 hover:text-red-700 font-bold uppercase text-[9px]"
+                          >
+                            Delete Exam
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2438,6 +2737,17 @@ export const SchoolAdminDashboard: React.FC<SchoolAdminDashboardProps> = ({ scho
         }}
         defaultSchool={school}
         initialIdentifier={resetUserTarget?.email || resetUserTarget?.regNo || ''}
+      />
+
+      {/* CBT Detailed Attempt Review Modal */}
+      <CbtAttemptDetailsModal
+        isOpen={!!selectedCbtAttemptForAdminModal}
+        onClose={() => {
+          setSelectedCbtAttemptForAdminModal(null);
+          setSelectedCbtExamForAdminModal(null);
+        }}
+        attempt={selectedCbtAttemptForAdminModal}
+        exam={selectedCbtExamForAdminModal}
       />
     </div>
   );

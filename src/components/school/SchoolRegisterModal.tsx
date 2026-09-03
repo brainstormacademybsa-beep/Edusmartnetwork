@@ -14,8 +14,6 @@ export const SchoolRegisterModal: React.FC<SchoolRegisterModalProps> = ({
   onClose,
   onRegistered,
 }) => {
-  if (!isOpen) return null;
-
   const [name, setName] = useState('');
   const [subdomain, setSubdomain] = useState('');
   const [logo, setLogo] = useState('');
@@ -96,6 +94,8 @@ export const SchoolRegisterModal: React.FC<SchoolRegisterModalProps> = ({
       onClose();
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">

@@ -41,6 +41,11 @@ export const CbtExamPlayer: React.FC<CbtExamPlayerProps> = ({
   const [timeLeftSeconds, setTimeLeftSeconds] = useState(exam.durationMinutes * 60);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [finalAttempt, setFinalAttempt] = useState<CbtAttempt | null>(previousAttempt || null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const answeredCount = Object.keys(answers).length;
+  const unansweredCount = exam.questions.length - answeredCount;
+  const flaggedCount = Object.keys(flagged).filter((k) => flagged[k]).length;
 
   // Countdown timer effect
   useEffect(() => {
@@ -203,10 +208,16 @@ export const CbtExamPlayer: React.FC<CbtExamPlayerProps> = ({
           </div>
         </div>
 
-        <div className="pt-4 flex justify-end">
+        <div className="pt-4 flex items-center justify-between border-t border-slate-800">
+          <button
+            onClick={() => window.print()}
+            className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold rounded-xl text-xs flex items-center gap-2 transition"
+          >
+            <Award className="w-4 h-4" /> Print CBT Result Slip
+          </button>
           <button
             onClick={onFinished}
-            className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-xs transition"
+            className="px-6 py-2.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs transition shadow-md"
           >
             Return to Dashboard
           </button>
@@ -216,18 +227,32 @@ export const CbtExamPlayer: React.FC<CbtExamPlayerProps> = ({
   }
 
   return (
-    <div className="max-w-4xl mx-auto my-6 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-white space-y-6">
-      {/* Top Bar with Timer */}
+    <div className="max-w-4xl mx-auto my-6 bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl text-white space-y-6 relative">
+      {/* Top Bar with Timer & Quick Submit */}
       <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-950 p-4 rounded-xl border border-slate-800">
         <div>
           <h2 className="text-base font-bold text-white">{exam.title}</h2>
           <p className="text-xs text-slate-400">{exam.subject} • {exam.className} • Candidate: <strong className="text-amber-300">{student.name} ({student.regNo})</strong></p>
         </div>
 
-        {/* Timer display */}
-        <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono font-bold text-sm ${isTimeWarning ? 'bg-red-950/80 border-red-500 text-red-300 animate-pulse' : 'bg-slate-900 border-amber-500/40 text-amber-400'}`}>
-          <Clock className="w-5 h-5" />
-          <span>Timer: {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}</span>
+        <div className="flex items-center gap-3">
+          {/* Timer display */}
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-xl border font-mono font-bold text-sm ${isTimeWarning ? 'bg-red-950/80 border-red-500 text-red-300 animate-pulse' : 'bg-slate-900 border-amber-500/40 text-amber-400'}`}>
+            <Clock className="w-5 h-5" />
+            <span>Timer: {String(mins).padStart(2, '0')}:{String(secs).padStart(2, '0')}</span>
+          </div>
+
+          {/* Quick Top Submit Button */}
+          <button
+            type="button"
+            id="btn-top-submit-cbt"
+            onClick={() => setShowConfirmModal(true)}
+            className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black rounded-xl text-xs flex items-center gap-2 shadow-md transition"
+            title="Submit CBT Exam"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Submit Exam</span>
+          </button>
         </div>
       </div>
 
@@ -283,7 +308,7 @@ export const CbtExamPlayer: React.FC<CbtExamPlayerProps> = ({
             })}
           </div>
 
-          {/* Prev / Next controls */}
+          {/* Prev / Next & Submit controls */}
           <div className="flex items-center justify-between pt-4 border-t border-slate-700">
             <button
               type="button"
@@ -294,70 +319,170 @@ export const CbtExamPlayer: React.FC<CbtExamPlayerProps> = ({
               <ChevronLeft className="w-4 h-4" /> Previous
             </button>
 
-            {currentIdx < exam.questions.length - 1 ? (
-              <button
-                type="button"
-                onClick={() => setCurrentIdx((i) => i + 1)}
-                className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1 shadow"
-              >
-                Next <ChevronRight className="w-4 h-4" />
-              </button>
-            ) : (
-              <button
-                type="button"
-                id="btn-submit-cbt-exam"
-                onClick={handleAutoSubmit}
-                className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-slate-950 font-black rounded-lg text-xs flex items-center gap-2 shadow-lg"
-              >
-                <Send className="w-4 h-4" /> Submit CBT Exam
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {currentIdx < exam.questions.length - 1 ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmModal(true)}
+                    className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-emerald-400 font-bold rounded-lg text-xs flex items-center gap-1.5 border border-emerald-500/40 shadow-sm"
+                  >
+                    <Send className="w-3.5 h-3.5" /> Submit Exam
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentIdx((i) => i + 1)}
+                    className="px-5 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold rounded-lg text-xs flex items-center gap-1 shadow"
+                  >
+                    Next <ChevronRight className="w-4 h-4" />
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  id="btn-submit-cbt-exam"
+                  onClick={() => setShowConfirmModal(true)}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-slate-950 font-black rounded-lg text-xs flex items-center gap-2 shadow-lg"
+                >
+                  <Send className="w-4 h-4" /> Final Submit CBT Exam
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Right 1 col: Question Palette Grid */}
-        <div className="space-y-4 bg-slate-800/60 p-4 rounded-2xl border border-slate-700 text-xs">
-          <h4 className="font-bold text-amber-300 uppercase text-[11px]">Question Palette</h4>
+        {/* Right 1 col: Question Palette Grid & Submit Button */}
+        <div className="space-y-4 bg-slate-800/60 p-4 rounded-2xl border border-slate-700 text-xs flex flex-col justify-between">
+          <div className="space-y-4">
+            <h4 className="font-bold text-amber-300 uppercase text-[11px]">Question Palette</h4>
 
-          <div className="grid grid-cols-4 gap-2">
-            {exam.questions.map((q, idx) => {
-              const isAnswered = !!answers[q.id];
-              const isFlag = flagged[q.id];
-              const isCurrent = idx === currentIdx;
+            <div className="grid grid-cols-4 gap-2">
+              {exam.questions.map((q, idx) => {
+                const isAnswered = !!answers[q.id];
+                const isFlag = flagged[q.id];
+                const isCurrent = idx === currentIdx;
 
-              let btnStyle = 'bg-slate-900 border-slate-700 text-slate-300';
-              if (isCurrent) btnStyle = 'bg-amber-500 text-slate-950 font-black border-amber-400 ring-2 ring-amber-400';
-              else if (isFlag) btnStyle = 'bg-amber-900/60 text-amber-300 border-amber-500';
-              else if (isAnswered) btnStyle = 'bg-emerald-950/80 text-emerald-300 border-emerald-500/80';
+                let btnStyle = 'bg-slate-900 border-slate-700 text-slate-300';
+                if (isCurrent) btnStyle = 'bg-amber-500 text-slate-950 font-black border-amber-400 ring-2 ring-amber-400';
+                else if (isFlag) btnStyle = 'bg-amber-900/60 text-amber-300 border-amber-500';
+                else if (isAnswered) btnStyle = 'bg-emerald-950/80 text-emerald-300 border-emerald-500/80';
 
-              return (
-                <button
-                  key={q.id}
-                  onClick={() => setCurrentIdx(idx)}
-                  className={`h-9 rounded-lg border text-xs font-mono font-bold flex items-center justify-center transition ${btnStyle}`}
-                >
-                  {idx + 1}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={q.id}
+                    onClick={() => setCurrentIdx(idx)}
+                    className={`h-9 rounded-lg border text-xs font-mono font-bold flex items-center justify-center transition ${btnStyle}`}
+                  >
+                    {idx + 1}
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="space-y-1.5 pt-2 border-t border-slate-700 text-[11px] text-slate-400">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded bg-emerald-900 border border-emerald-500"></span>
+                <span>Answered ({answeredCount})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded bg-amber-900 border border-amber-500"></span>
+                <span>Flagged ({flaggedCount})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded bg-slate-900 border border-slate-700"></span>
+                <span>Unanswered ({unansweredCount})</span>
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-1.5 pt-2 border-t border-slate-700 text-[11px] text-slate-400">
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded bg-emerald-900 border border-emerald-500"></span>
-              <span>Answered ({Object.keys(answers).length})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded bg-amber-900 border border-amber-500"></span>
-              <span>Flagged ({Object.keys(flagged).filter((k) => flagged[k]).length})</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="w-3 h-3 rounded bg-slate-900 border border-slate-700"></span>
-              <span>Unanswered ({exam.questions.length - Object.keys(answers).length})</span>
-            </div>
+          {/* Persistent Palette Submit Button */}
+          <div className="pt-4 border-t border-slate-700 space-y-2">
+            <button
+              type="button"
+              id="btn-palette-submit-cbt"
+              onClick={() => setShowConfirmModal(true)}
+              className="w-full py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition"
+            >
+              <Send className="w-4 h-4" /> Submit Exam ({answeredCount}/{exam.questions.length})
+            </button>
+            <p className="text-[10px] text-slate-400 text-center font-medium">
+              {unansweredCount > 0 ? (
+                <span className="text-amber-400 font-semibold">{unansweredCount} question{unansweredCount > 1 ? 's' : ''} unattempted</span>
+              ) : (
+                <span className="text-emerald-400 font-semibold">✓ All {exam.questions.length} questions answered</span>
+              )}
+            </p>
           </div>
         </div>
       </div>
+
+      {/* SUBMISSION CONFIRMATION MODAL */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 text-white rounded-2xl w-full max-w-md p-6 shadow-2xl space-y-5">
+            <div className="text-center space-y-2">
+              <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                <Send className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-black uppercase tracking-tight">Submit Computer Based Test?</h3>
+              <p className="text-xs text-slate-400">
+                Are you ready to submit your exam? Once submitted, your answers will be automatically graded and finalized.
+              </p>
+            </div>
+
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-slate-800">
+                <span className="text-slate-400">Total Questions:</span>
+                <span className="font-mono font-bold text-white">{exam.questions.length}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-800">
+                <span className="text-slate-400">Answered Questions:</span>
+                <span className="font-mono font-bold text-emerald-400">{answeredCount} of {exam.questions.length}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-800">
+                <span className="text-slate-400">Flagged For Review:</span>
+                <span className="font-mono font-bold text-amber-400">{flaggedCount}</span>
+              </div>
+              <div className="flex justify-between items-center py-1">
+                <span className="text-slate-400">Unanswered Questions:</span>
+                <span className={`font-mono font-bold ${unansweredCount > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                  {unansweredCount}
+                </span>
+              </div>
+            </div>
+
+            {unansweredCount > 0 && (
+              <div className="p-3 bg-amber-950/40 border border-amber-500/30 rounded-xl flex items-start gap-2.5 text-[11px] text-amber-300">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
+                <span>
+                  <strong>Notice:</strong> You have {unansweredCount} unanswered question{unansweredCount > 1 ? 's' : ''}. Unanswered questions will receive 0 marks.
+                </span>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition"
+              >
+                Continue Exam
+              </button>
+              <button
+                type="button"
+                id="btn-confirm-final-submit"
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  handleAutoSubmit();
+                }}
+                className="px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black rounded-xl text-xs shadow-lg transition flex items-center justify-center gap-2"
+              >
+                <Check className="w-4 h-4" /> Yes, Submit Exam
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

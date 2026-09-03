@@ -26,6 +26,33 @@ import {
 } from '../data/initialData';
 import { INITIAL_AUDIT_LOGS } from '../data/initialAuditData';
 import { calculatePositions, generateStudentRegNo } from '../utils/calcUtils';
+import { db } from './firebase';
+import { collection, doc, setDoc, getDocs, deleteDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+
+/**
+ * Deeply sanitizes any object or array destined for Cloud Firestore.
+ * Strips all undefined properties and ensures Firestore cannot reject the payload.
+ */
+function cleanForFirestore<T>(data: T): any {
+  if (data === null || data === undefined) {
+    return null;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter((item) => item !== undefined)
+      .map((item) => cleanForFirestore(item));
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const clean: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data as Record<string, any>)) {
+      if (value !== undefined) {
+        clean[key] = cleanForFirestore(value);
+      }
+    }
+    return clean;
+  }
+  return data;
+}
 
 const STORAGE_KEYS = {
   SCHOOLS: 'edusmart_schools_v1',
@@ -46,21 +73,179 @@ const STORAGE_KEYS = {
 
 class StorageService {
   private listeners: Array<() => void> = [];
+  private isCloudSynced = false;
+  private unsubscribers: Unsubscribe[] = [];
 
   constructor() {
     this.init();
   }
 
   private init() {
-    const version = localStorage.getItem('EDUSMART_VERSION_V2');
-    if (version !== '2.1.0') {
-      localStorage.clear();
-      localStorage.setItem('EDUSMART_VERSION_V2', '2.1.0');
-      this.initDefaults(true);
-    }
+    // Non-destructive initialization: NEVER clear user data on boot or updates!
     if (!localStorage.getItem(STORAGE_KEYS.SCHOOLS)) {
-      this.initDefaults();
+      this.initDefaults(false);
+    } else {
+      // Ensure all storage keys exist without wiping existing custom user data
+      this.ensureBaselineKeys();
     }
+
+    // Sync cloud records in background and bind real-time listeners
+    this.syncFromCloud();
+  }
+
+  /**
+   * Safe persistent cloud writer:
+   * Strips undefined fields and commits with merge: true to Cloud Firestore.
+   */
+  public async saveToCloud(collectionName: string, id: string, data: any): Promise<void> {
+    try {
+      if (!id) return;
+      const cleaned = cleanForFirestore(data);
+      await setDoc(doc(db, collectionName, id), cleaned, { merge: true });
+    } catch (err) {
+      console.warn(`Firestore save notice on ${collectionName}/${id}:`, err);
+    }
+  }
+
+  /**
+   * Safe persistent cloud deleter.
+   */
+  public async deleteFromCloud(collectionName: string, id: string): Promise<void> {
+    try {
+      if (!id) return;
+      await deleteDoc(doc(db, collectionName, id));
+    } catch (err) {
+      console.warn(`Firestore delete notice on ${collectionName}/${id}:`, err);
+    }
+  }
+
+  private ensureBaselineKeys() {
+    if (!localStorage.getItem(STORAGE_KEYS.USERS)) this.setItem(STORAGE_KEYS.USERS, INITIAL_USERS);
+    if (!localStorage.getItem(STORAGE_KEYS.CBT_EXAMS)) this.setItem(STORAGE_KEYS.CBT_EXAMS, INITIAL_CBT_EXAMS);
+    if (!localStorage.getItem(STORAGE_KEYS.CBT_ATTEMPTS)) this.setItem(STORAGE_KEYS.CBT_ATTEMPTS, INITIAL_CBT_ATTEMPTS);
+    if (!localStorage.getItem(STORAGE_KEYS.RESULTS)) this.setItem(STORAGE_KEYS.RESULTS, calculatePositions(INITIAL_STUDENT_RESULTS));
+    if (!localStorage.getItem(STORAGE_KEYS.FEE_SCHEDULES)) this.setItem(STORAGE_KEYS.FEE_SCHEDULES, INITIAL_FEE_SCHEDULES);
+    if (!localStorage.getItem(STORAGE_KEYS.FEE_PAYMENTS)) this.setItem(STORAGE_KEYS.FEE_PAYMENTS, INITIAL_FEE_PAYMENTS);
+    if (!localStorage.getItem(STORAGE_KEYS.ADMISSIONS)) this.setItem(STORAGE_KEYS.ADMISSIONS, INITIAL_ADMISSION_APPLICATIONS);
+    if (!localStorage.getItem(STORAGE_KEYS.PINS)) this.setItem(STORAGE_KEYS.PINS, INITIAL_RESULT_PINS);
+    if (!localStorage.getItem(STORAGE_KEYS.AUDIT_LOGS)) this.setItem(STORAGE_KEYS.AUDIT_LOGS, INITIAL_AUDIT_LOGS);
+    if (!localStorage.getItem(STORAGE_KEYS.ACTIVE_SCHOOL_ID)) this.setItem(STORAGE_KEYS.ACTIVE_SCHOOL_ID, INITIAL_SCHOOLS[0].id);
+  }
+
+  private async syncCollection<T extends { id: string; schoolId?: string }>(
+    collectionName: string,
+    storageKey: string,
+    localItems: T[]
+  ): Promise<void> {
+    try {
+      const snap = await getDocs(collection(db, collectionName));
+      const cloudItems: T[] = [];
+      snap.forEach((d) => {
+        cloudItems.push(d.data() as T);
+      });
+
+      // Map existing local items
+      const itemMap = new Map<string, T>();
+      localItems.forEach((item) => itemMap.set(item.id, item));
+
+      // Merge cloud items (cloud items take precedence for matching IDs)
+      cloudItems.forEach((item) => itemMap.set(item.id, item));
+
+      // Push any custom local item created while offline or before sync that isn't in cloud yet
+      for (const item of localItems) {
+        if (!cloudItems.some((ci) => ci.id === item.id)) {
+          if (item.schoolId && item.schoolId !== 'super') {
+            this.saveToCloud(collectionName, item.id, item);
+          }
+        }
+      }
+
+      const merged = Array.from(itemMap.values());
+      if (collectionName === 'results') {
+        const recalculated = calculatePositions(merged as unknown as StudentResult[]);
+        this.setItem(storageKey, recalculated);
+      } else {
+        this.setItem(storageKey, merged);
+      }
+    } catch (e) {
+      console.warn(`Sync warning for ${collectionName}:`, e);
+    }
+  }
+
+  /**
+   * Comprehensive background cloud synchronization with Firestore:
+   * Downloads registered schools, users, results, CBTs, fee records, PINs & applications
+   * so records ALWAYS persist across browser clears, updates, devices, or tabs.
+   */
+  public async syncFromCloud() {
+    if (this.isCloudSynced || typeof window === 'undefined') return;
+    this.isCloudSynced = true;
+
+    try {
+      await Promise.all([
+        this.syncCollection<School>('schools', STORAGE_KEYS.SCHOOLS, this.getSchools()),
+        this.syncCollection<User>('users', STORAGE_KEYS.USERS, this.getUsers()),
+        this.syncCollection<StudentResult>('results', STORAGE_KEYS.RESULTS, this.getResults()),
+        this.syncCollection<CbtExam>('cbt_exams', STORAGE_KEYS.CBT_EXAMS, this.getCbtExams()),
+        this.syncCollection<CbtAttempt>('cbt_attempts', STORAGE_KEYS.CBT_ATTEMPTS, this.getCbtAttempts()),
+        this.syncCollection<FeeSchedule>('fee_schedules', STORAGE_KEYS.FEE_SCHEDULES, this.getFeeSchedules()),
+        this.syncCollection<FeePayment>('fee_payments', STORAGE_KEYS.FEE_PAYMENTS, this.getFeePayments()),
+        this.syncCollection<AdmissionApplication>('admissions', STORAGE_KEYS.ADMISSIONS, this.getAdmissions()),
+        this.syncCollection<ResultPin>('pins', STORAGE_KEYS.PINS, this.getPins()),
+        this.syncCollection<AuditLog>('audit_logs', STORAGE_KEYS.AUDIT_LOGS, this.getAuditLogs()),
+      ]);
+
+      this.initRealtimeListeners();
+      this.notify();
+    } catch (err) {
+      console.warn('Background Firestore sync notice (offline or read limits):', err);
+    }
+  }
+
+  private initRealtimeListeners() {
+    if (this.unsubscribers.length > 0 || typeof window === 'undefined') return;
+
+    const collectionsToListen = [
+      { name: 'schools', key: STORAGE_KEYS.SCHOOLS },
+      { name: 'users', key: STORAGE_KEYS.USERS },
+      { name: 'results', key: STORAGE_KEYS.RESULTS },
+      { name: 'fee_payments', key: STORAGE_KEYS.FEE_PAYMENTS },
+      { name: 'cbt_exams', key: STORAGE_KEYS.CBT_EXAMS },
+      { name: 'cbt_attempts', key: STORAGE_KEYS.CBT_ATTEMPTS },
+    ];
+
+    collectionsToListen.forEach(({ name, key }) => {
+      try {
+        const unsub = onSnapshot(
+          collection(db, name),
+          (snapshot) => {
+            if (snapshot.empty) return;
+            const currentLocal = this.getItem<any[]>(key, []);
+            const map = new Map<string, any>();
+            currentLocal.forEach((item) => map.set(item.id, item));
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === 'added' || change.type === 'modified') {
+                map.set(change.doc.id, change.doc.data());
+              } else if (change.type === 'removed') {
+                map.delete(change.doc.id);
+              }
+            });
+            const updated = Array.from(map.values());
+            if (name === 'results') {
+              this.setItem(key, calculatePositions(updated as StudentResult[]));
+            } else {
+              this.setItem(key, updated);
+            }
+          },
+          (err) => {
+            console.warn(`Realtime listener notice for ${name}:`, err);
+          }
+        );
+        this.unsubscribers.push(unsub);
+      } catch (e) {
+        console.warn(`Could not attach listener for ${name}:`, e);
+      }
+    });
   }
 
   public subscribe(listener: () => void): () => void {
@@ -93,7 +278,7 @@ class StorageService {
   }
 
   public initDefaults(force = false) {
-    if (force || !localStorage.getItem(STORAGE_KEYS.SCHOOLS)) {
+    if (force) {
       this.setItem(STORAGE_KEYS.SCHOOLS, INITIAL_SCHOOLS);
       this.setItem(STORAGE_KEYS.USERS, INITIAL_USERS);
       this.setItem(STORAGE_KEYS.CBT_EXAMS, INITIAL_CBT_EXAMS);
@@ -104,11 +289,10 @@ class StorageService {
       this.setItem(STORAGE_KEYS.ADMISSIONS, INITIAL_ADMISSION_APPLICATIONS);
       this.setItem(STORAGE_KEYS.PINS, INITIAL_RESULT_PINS);
       this.setItem(STORAGE_KEYS.AUDIT_LOGS, INITIAL_AUDIT_LOGS);
-      
-      // Start with no user logged in for a clean landing page demo
       localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
-      
       this.setItem(STORAGE_KEYS.ACTIVE_SCHOOL_ID, INITIAL_SCHOOLS[0].id);
+    } else {
+      this.ensureBaselineKeys();
     }
   }
 
@@ -165,12 +349,19 @@ class StorageService {
     users.push(newAdmin);
     this.setItem(STORAGE_KEYS.USERS, users);
 
+    // Persist to Cloud Firestore
+    this.saveToCloud('schools', newSchool.id, newSchool);
+    this.saveToCloud('users', newAdmin.id, newAdmin);
+
     return newSchool;
   }
 
   public updateSchool(updated: School) {
     const schools = this.getSchools().map((s) => (s.id === updated.id ? updated : s));
     this.setItem(STORAGE_KEYS.SCHOOLS, schools);
+
+    // Update in Cloud Firestore
+    this.saveToCloud('schools', updated.id, updated);
   }
 
   public approveSchool(schoolId: string, isApproved: boolean) {
@@ -178,6 +369,11 @@ class StorageService {
       s.id === schoolId ? { ...s, isApproved, status: (isApproved ? 'ACTIVE' : 'SUSPENDED') as School['status'] } : s
     );
     this.setItem(STORAGE_KEYS.SCHOOLS, schools);
+
+    const approvedSchool = schools.find((s) => s.id === schoolId);
+    if (approvedSchool) {
+      this.saveToCloud('schools', schoolId, approvedSchool);
+    }
   }
 
   // --- USERS & AUTH ---
@@ -212,18 +408,32 @@ class StorageService {
     const defaultStudentPin = user.role === 'STUDENT' ? user.regNo : user.studentPin;
     const newUser: User = {
       ...user,
-      id: `user-${Date.now()}`,
+      id: `user-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       password: user.password || defaultPassword,
       studentPin: defaultStudentPin,
     };
     users.push(newUser);
     this.setItem(STORAGE_KEYS.USERS, users);
+
+    // Save reliably to Cloud Firestore
+    this.saveToCloud('users', newUser.id, newUser);
+
     return newUser;
   }
 
   public updateUser(user: User) {
     const users = this.getUsers().map((u) => (u.id === user.id ? user : u));
     this.setItem(STORAGE_KEYS.USERS, users);
+
+    // Update in Cloud Firestore
+    this.saveToCloud('users', user.id, user);
+  }
+
+  public deleteUser(userId: string): boolean {
+    const users = this.getUsers().filter((u) => u.id !== userId);
+    this.setItem(STORAGE_KEYS.USERS, users);
+    this.deleteFromCloud('users', userId);
+    return true;
   }
 
   public authenticateUser(
@@ -745,12 +955,15 @@ class StorageService {
       exams.push(exam);
     }
     this.setItem(STORAGE_KEYS.CBT_EXAMS, exams);
+
+    this.saveToCloud('cbt_exams', exam.id, exam);
     return exam;
   }
 
   public deleteCbtExam(examId: string) {
     const exams = this.getCbtExams().filter((e) => e.id !== examId);
     this.setItem(STORAGE_KEYS.CBT_EXAMS, exams);
+    this.deleteFromCloud('cbt_exams', examId);
   }
 
   public getCbtAttempts(schoolId?: string): CbtAttempt[] {
@@ -763,6 +976,8 @@ class StorageService {
     const attempts = this.getCbtAttempts();
     attempts.push(attempt);
     this.setItem(STORAGE_KEYS.CBT_ATTEMPTS, attempts);
+
+    this.saveToCloud('cbt_attempts', attempt.id, attempt);
 
     // Auto sync CBT score to student results if applicable!
     const exams = this.getCbtExams();
@@ -784,6 +999,7 @@ class StorageService {
         results[existingResIndex].total =
           results[existingResIndex].ca + attempt.score;
         this.setItem(STORAGE_KEYS.RESULTS, calculatePositions(results));
+        this.saveResult(results[existingResIndex]);
       } else {
         // Create new result record
         const newResult: StudentResult = {
@@ -804,6 +1020,7 @@ class StorageService {
         };
         results.push(newResult);
         this.setItem(STORAGE_KEYS.RESULTS, calculatePositions(results));
+        this.saveResult(newResult);
       }
     }
 
@@ -838,6 +1055,8 @@ class StorageService {
     }
     const recalculated = calculatePositions(allResults);
     this.setItem(STORAGE_KEYS.RESULTS, recalculated);
+
+    this.saveToCloud('results', result.id, result);
     return result;
   }
 
@@ -858,10 +1077,19 @@ class StorageService {
       } else {
         allResults.push(nr);
       }
+
+      this.saveToCloud('results', nr.id, nr);
     });
 
     const recalculated = calculatePositions(allResults);
     this.setItem(STORAGE_KEYS.RESULTS, recalculated);
+  }
+
+  public deleteResult(resultId: string) {
+    const all = this.getResults().filter((r) => r.id !== resultId);
+    const recalculated = calculatePositions(all);
+    this.setItem(STORAGE_KEYS.RESULTS, recalculated);
+    this.deleteFromCloud('results', resultId);
   }
 
   // --- SCHOOL FEES TRACKING ---
@@ -877,6 +1105,8 @@ class StorageService {
     if (idx >= 0) schedules[idx] = schedule;
     else schedules.push(schedule);
     this.setItem(STORAGE_KEYS.FEE_SCHEDULES, schedules);
+
+    this.saveToCloud('fee_schedules', schedule.id, schedule);
     return schedule;
   }
 
@@ -890,6 +1120,8 @@ class StorageService {
     const payments = this.getFeePayments();
     payments.push(payment);
     this.setItem(STORAGE_KEYS.FEE_PAYMENTS, payments);
+
+    this.saveToCloud('fee_payments', payment.id, payment);
     return payment;
   }
 
@@ -915,6 +1147,8 @@ class StorageService {
     };
     admissions.push(newApp);
     this.setItem(STORAGE_KEYS.ADMISSIONS, admissions);
+
+    this.saveToCloud('admissions', newApp.id, newApp);
     return newApp;
   }
 
@@ -927,6 +1161,8 @@ class StorageService {
       admissions.push(app);
     }
     this.setItem(STORAGE_KEYS.ADMISSIONS, admissions);
+
+    this.saveToCloud('admissions', app.id, app);
     return app;
   }
 
@@ -943,6 +1179,7 @@ class StorageService {
     app.status = 'APPROVED';
     app.regNoAssigned = regNo;
     this.setItem(STORAGE_KEYS.ADMISSIONS, admissions);
+    this.updateAdmission(app);
 
     // Create student account: Student maintains registration number as password
     const newStudent: User = {
@@ -998,6 +1235,8 @@ class StorageService {
     const pins = this.getPins();
     pins.push(pin);
     this.setItem(STORAGE_KEYS.PINS, pins);
+
+    this.saveToCloud('pins', pin.id, pin);
     return pin;
   }
 
@@ -1030,6 +1269,7 @@ class StorageService {
       pin.studentRegNo = regNo;
     }
     this.setItem(STORAGE_KEYS.PINS, pins);
+    this.saveToCloud('pins', pin.id, pin);
 
     this.addAuditLog({
       schoolId: pin.schoolId,
@@ -1062,6 +1302,7 @@ class StorageService {
     // keep max 500 logs per client cache
     const trimmed = logs.slice(0, 500);
     this.setItem(STORAGE_KEYS.AUDIT_LOGS, trimmed);
+    this.saveToCloud('audit_logs', newLog.id, newLog);
     return newLog;
   }
 
@@ -1110,6 +1351,7 @@ class StorageService {
     const all = this.getItem<Record<string, SchoolSecuritySettings>>(STORAGE_KEYS.SECURITY_SETTINGS, {});
     all[schoolId] = updatedSec;
     this.setItem(STORAGE_KEYS.SECURITY_SETTINGS, all);
+    this.saveToCloud('security_settings', schoolId, updatedSec);
 
     this.addAuditLog({
       schoolId,
@@ -1128,6 +1370,7 @@ class StorageService {
     const all = this.getItem<Record<string, SchoolSecuritySettings>>(STORAGE_KEYS.SECURITY_SETTINGS, {});
     all[settings.schoolId] = settings;
     this.setItem(STORAGE_KEYS.SECURITY_SETTINGS, all);
+    this.saveToCloud('security_settings', settings.schoolId, settings);
 
     this.addAuditLog({
       schoolId: settings.schoolId,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   FileQuestion,
   FileSpreadsheet,
@@ -19,6 +19,7 @@ import { storageService } from '../../services/storageService';
 import { CbtAttempt, CbtExam, School, StudentResult, User } from '../../types';
 import { DEFAULT_SCHOOL_CLASSES } from '../../constants/classes';
 import { CbtCreator } from '../cbt/CbtCreator';
+import { CbtAttemptDetailsModal } from '../cbt/CbtAttemptDetailsModal';
 import { StudentResultPreviewModal } from '../results/StudentResultPreviewModal';
 import { StudentReportEditorModal } from '../results/StudentReportEditorModal';
 import { WhatsAppShareModal } from '../results/WhatsAppShareModal';
@@ -37,6 +38,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ school, teac
   const [previewStudent, setPreviewStudent] = useState<any | null>(null);
   const [editReportStudent, setEditReportStudent] = useState<any | null>(null);
   const [whatsAppStudent, setWhatsAppStudent] = useState<any | null>(null);
+  const [selectedCbtAttemptForModal, setSelectedCbtAttemptForModal] = useState<CbtAttempt | null>(null);
+  const [selectedCbtExamForModal, setSelectedCbtExamForModal] = useState<CbtExam | null>(null);
+  const [cbtSearchTerm, setCbtSearchTerm] = useState('');
 
   // Class & Subject filters
   const teacherAssignedClasses =
@@ -57,6 +61,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ school, teac
 
   // Save feedback
   const [saveMsg, setSaveMsg] = useState('');
+  const [, setDataVersion] = useState(0);
+
+  useEffect(() => {
+    return storageService.subscribe(() => {
+      setDataVersion((v) => v + 1);
+    });
+  }, []);
 
   const cbtExams = storageService.getCbtExams(school.id).filter((e) => e.teacherId === teacher.id || e.className === selectedClass);
   const cbtAttempts = storageService.getCbtAttempts(school.id);
@@ -279,7 +290,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ school, teac
               activeTab === 'cbt-promote' ? 'bg-amber-500 text-slate-950 shadow' : 'text-blue-200 hover:text-white hover:bg-blue-800'
             }`}
           >
-            <Award className="w-3.5 h-3.5" /> CBT Promoted System
+            <Award className="w-3.5 h-3.5" /> CBT Test Scores & Promotion
             {currentCbtAttempts.length > 0 && (
               <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-emerald-500 text-slate-950 font-black">
                 {currentCbtAttempts.length}
@@ -589,6 +600,25 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ school, teac
             </p>
           </div>
 
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-50 p-3 rounded border border-slate-200">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-slate-700 uppercase">Search Candidates:</span>
+              <input
+                type="text"
+                value={cbtSearchTerm}
+                onChange={(e) => setCbtSearchTerm(e.target.value)}
+                placeholder="Search student name or reg no..."
+                className="bg-white border border-slate-300 rounded px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-blue-900 w-64 shadow-xs"
+              />
+              {cbtSearchTerm && (
+                <button onClick={() => setCbtSearchTerm('')} className="text-xs text-slate-400 hover:text-slate-700">Clear</button>
+              )}
+            </div>
+            <div className="text-xs font-bold text-slate-600">
+              Showing <span className="text-blue-900 font-black">{currentCbtAttempts.filter((a) => !cbtSearchTerm || a.studentName.toLowerCase().includes(cbtSearchTerm.toLowerCase()) || a.studentRegNo.toLowerCase().includes(cbtSearchTerm.toLowerCase())).length}</span> submissions for {selectedClass} • {selectedSubject}
+            </div>
+          </div>
+
           {currentCbtAttempts.length === 0 ? (
             <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded space-y-2">
               <FileQuestion className="w-8 h-8 text-slate-400 mx-auto" />
@@ -609,50 +639,70 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ school, teac
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
-                  {currentCbtAttempts.map((att) => {
-                    const savedRes = currentResults.find((r) => r.studentRegNo === att.studentRegNo);
-                    const isPromoted = savedRes && savedRes.cbtScore !== undefined;
+                  {currentCbtAttempts
+                    .filter(
+                      (a) =>
+                        !cbtSearchTerm ||
+                        a.studentName.toLowerCase().includes(cbtSearchTerm.toLowerCase()) ||
+                        a.studentRegNo.toLowerCase().includes(cbtSearchTerm.toLowerCase())
+                    )
+                    .map((att) => {
+                      const savedRes = currentResults.find((r) => r.studentRegNo === att.studentRegNo);
+                      const isPromoted = savedRes && savedRes.cbtScore !== undefined;
 
-                    return (
-                      <tr key={att.id} className="hover:bg-slate-50">
-                        <td className="p-3">
-                          <div className="font-bold text-slate-900 uppercase">{att.studentName}</div>
-                          <div className="text-[10px] text-slate-500 font-mono">{att.studentRegNo}</div>
-                        </td>
+                      return (
+                        <tr key={att.id} className="hover:bg-slate-50">
+                          <td className="p-3">
+                            <div className="font-bold text-slate-900 uppercase">{att.studentName}</div>
+                            <div className="text-[10px] text-slate-500 font-mono">{att.studentRegNo}</div>
+                          </td>
 
-                        <td className="p-3 font-semibold text-slate-800">{att.examTitle}</td>
+                          <td className="p-3 font-semibold text-slate-800">{att.examTitle}</td>
 
-                        <td className="p-3 text-center font-mono font-bold text-blue-900">
-                          {att.score} / {att.maxScore}
-                        </td>
+                          <td className="p-3 text-center font-mono font-bold text-blue-900">
+                            {att.score} / {att.maxScore}
+                          </td>
 
-                        <td className="p-3 text-center font-mono font-bold text-emerald-700">
-                          {att.percentage}%
-                        </td>
+                          <td className="p-3 text-center font-mono font-bold text-emerald-700">
+                            {att.percentage}%
+                          </td>
 
-                        <td className="p-3 text-center">
-                          {isPromoted ? (
-                            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 uppercase tracking-wider inline-flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Promoted to Report Card
-                            </span>
-                          ) : (
-                            <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 uppercase tracking-wider">
-                              Pending Promotion
-                            </span>
-                          )}
-                        </td>
+                          <td className="p-3 text-center">
+                            {isPromoted ? (
+                              <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 uppercase tracking-wider inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Promoted to Report Card
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 uppercase tracking-wider">
+                                Pending Promotion
+                              </span>
+                            )}
+                          </td>
 
-                        <td className="p-3 text-right">
-                          <button
-                            onClick={() => handlePromoteCbtAttempt(att)}
-                            className="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-amber-300 font-bold uppercase tracking-wider rounded text-[11px] shadow-sm transition"
-                          >
-                            Promote to Report Card
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                          <td className="p-3 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => {
+                                  const exam = cbtExams.find((e) => e.id === att.examId);
+                                  setSelectedCbtAttemptForModal(att);
+                                  setSelectedCbtExamForModal(exam || null);
+                                }}
+                                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 font-bold uppercase tracking-wider rounded text-[10px] shadow-sm transition flex items-center gap-1"
+                                title="View candidate detailed answers and solutions"
+                              >
+                                <Eye className="w-3.5 h-3.5" /> Answers
+                              </button>
+                              <button
+                                onClick={() => handlePromoteCbtAttempt(att)}
+                                className="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-white font-bold uppercase tracking-wider rounded text-[10px] shadow-sm transition"
+                              >
+                                Promote
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
@@ -896,6 +946,17 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ school, teac
         }
         term={selectedTerm}
         session={selectedSession}
+      />
+
+      {/* CBT Attempt & Answers Modal */}
+      <CbtAttemptDetailsModal
+        isOpen={!!selectedCbtAttemptForModal}
+        onClose={() => {
+          setSelectedCbtAttemptForModal(null);
+          setSelectedCbtExamForModal(null);
+        }}
+        attempt={selectedCbtAttemptForModal}
+        exam={selectedCbtExamForModal}
       />
     </div>
   );

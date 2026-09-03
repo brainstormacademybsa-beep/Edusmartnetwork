@@ -33,45 +33,43 @@ export const EditStudentProfileModal: React.FC<EditStudentProfileModalProps> = (
   school,
   onSaved,
 }) => {
-  if (!isOpen || !student) return null;
-
-  const [name, setName] = useState(student.name || '');
-  const [className, setClassName] = useState(student.className || 'JSS 1A');
-  const [gender, setGender] = useState(student.gender || 'Male');
-  const [dob, setDob] = useState(student.dob || '2015-05-12');
-  const [admissionDate, setAdmissionDate] = useState(student.admissionDate || new Date().toISOString().split('T')[0]);
-  const [previousSchool, setPreviousSchool] = useState(student.previousSchool || '');
-  const [lastClassAttended, setLastClassAttended] = useState(student.lastClassAttended || '');
-  const [nationality, setNationality] = useState(student.nationality || 'Nigerian');
-  const [religion, setReligion] = useState(student.religion || 'Christianity');
-  const [stateOfOrigin, setStateOfOrigin] = useState(student.stateOfOrigin || 'Lagos');
-  const [lga, setLga] = useState(student.lga || 'Ikeja');
-  const [residentAddress, setResidentAddress] = useState(student.residentAddress || '');
-  const [avatarUrl, setAvatarUrl] = useState(student.avatarUrl || '');
+  const [name, setName] = useState(student?.name || '');
+  const [className, setClassName] = useState(student?.className || 'JSS 1A');
+  const [gender, setGender] = useState(student?.gender || 'Male');
+  const [dob, setDob] = useState(student?.dob || '2015-05-12');
+  const [admissionDate, setAdmissionDate] = useState(student?.admissionDate || new Date().toISOString().split('T')[0]);
+  const [previousSchool, setPreviousSchool] = useState(student?.previousSchool || '');
+  const [lastClassAttended, setLastClassAttended] = useState(student?.lastClassAttended || '');
+  const [nationality, setNationality] = useState(student?.nationality || 'Nigerian');
+  const [religion, setReligion] = useState(student?.religion || 'Christianity');
+  const [stateOfOrigin, setStateOfOrigin] = useState(student?.stateOfOrigin || 'Lagos');
+  const [lga, setLga] = useState(student?.lga || 'Ikeja');
+  const [residentAddress, setResidentAddress] = useState(student?.residentAddress || '');
+  const [avatarUrl, setAvatarUrl] = useState(student?.avatarUrl || '');
 
   // Living Arrangement
-  const [livingWith, setLivingWith] = useState<string>(student.livingWith || 'Biological Parents');
-  const [primaryContactPerson, setPrimaryContactPerson] = useState(student.primaryContactPerson || 'Both Parents');
+  const [livingWith, setLivingWith] = useState<string>(student?.livingWith || 'Biological Parents');
+  const [primaryContactPerson, setPrimaryContactPerson] = useState(student?.primaryContactPerson || 'Both Parents');
 
   // Biological Parents
-  const [fatherName, setFatherName] = useState(student.fatherName || '');
-  const [fatherPhone, setFatherPhone] = useState(student.fatherPhone || '');
-  const [fatherOccupation, setFatherOccupation] = useState(student.fatherOccupation || '');
-  const [motherName, setMotherName] = useState(student.motherName || '');
-  const [motherPhone, setMotherPhone] = useState(student.motherPhone || '');
-  const [motherOccupation, setMotherOccupation] = useState(student.motherOccupation || '');
+  const [fatherName, setFatherName] = useState(student?.fatherName || '');
+  const [fatherPhone, setFatherPhone] = useState(student?.fatherPhone || '');
+  const [fatherOccupation, setFatherOccupation] = useState(student?.fatherOccupation || '');
+  const [motherName, setMotherName] = useState(student?.motherName || '');
+  const [motherPhone, setMotherPhone] = useState(student?.motherPhone || '');
+  const [motherOccupation, setMotherOccupation] = useState(student?.motherOccupation || '');
 
   // Guardian / Guidance
-  const [guardianName, setGuardianName] = useState(student.guardianName || '');
-  const [guardianRelationship, setGuardianRelationship] = useState(student.guardianRelationship || 'Uncle');
-  const [guardianPhone, setGuardianPhone] = useState(student.guardianPhone || '');
-  const [guardianWhatsapp, setGuardianWhatsapp] = useState(student.guardianWhatsapp || '');
-  const [guardianOccupation, setGuardianOccupation] = useState(student.guardianOccupation || '');
-  const [guardianAddress, setGuardianAddress] = useState(student.guardianAddress || '');
+  const [guardianName, setGuardianName] = useState(student?.guardianName || '');
+  const [guardianRelationship, setGuardianRelationship] = useState(student?.guardianRelationship || 'Uncle');
+  const [guardianPhone, setGuardianPhone] = useState(student?.guardianPhone || '');
+  const [guardianWhatsapp, setGuardianWhatsapp] = useState(student?.guardianWhatsapp || '');
+  const [guardianOccupation, setGuardianOccupation] = useState(student?.guardianOccupation || '');
+  const [guardianAddress, setGuardianAddress] = useState(student?.guardianAddress || '');
 
   // Primary Notification lines
-  const [parentPhone, setParentPhone] = useState(student.parentPhone || '');
-  const [parentWhatsapp, setParentWhatsapp] = useState(student.parentWhatsapp || '');
+  const [parentPhone, setParentPhone] = useState(student?.parentPhone || '');
+  const [parentWhatsapp, setParentWhatsapp] = useState(student?.parentWhatsapp || '');
 
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
@@ -107,7 +105,7 @@ export const EditStudentProfileModal: React.FC<EditStudentProfileModalProps> = (
       setParentPhone(student.parentPhone || '');
       setParentWhatsapp(student.parentWhatsapp || '');
     }
-  }, [student]);
+  }, [student, isOpen]);
 
   const age = calculateAgeFromDob(dob);
   const availableLgas = NIGERIAN_STATES_AND_LGAS.find((s) => s.state === stateOfOrigin)?.lgas || [];
@@ -135,6 +133,7 @@ export const EditStudentProfileModal: React.FC<EditStudentProfileModalProps> = (
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!student) return;
 
     const updatedUser: UserType = {
       ...student,
@@ -179,6 +178,8 @@ export const EditStudentProfileModal: React.FC<EditStudentProfileModalProps> = (
       onClose();
     }, 800);
   };
+
+  if (!isOpen || !student) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto">

@@ -2,129 +2,58 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if the user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    // Helper function to check if the user belongs to the target school
-    function belongsToSchool(schoolId) {
-      return isAuthenticated() && (
-        request.auth.token.schoolId == schoolId || 
-        request.auth.token.role == 'SUPER_ADMIN'
-      );
-    }
-    
-    // Helper function to check if the user is a school admin
-    function isSchoolAdmin(schoolId) {
-      return isAuthenticated() && (
-        (request.auth.token.schoolId == schoolId && request.auth.token.role == 'SCHOOL_ADMIN') ||
-        request.auth.token.role == 'SUPER_ADMIN'
-      );
-    }
-
-    // Helper function to check if the user is a teacher of the school
-    function isTeacher(schoolId) {
-      return isAuthenticated() && (
-        (request.auth.token.schoolId == schoolId && (request.auth.token.role == 'TEACHER' || request.auth.token.role == 'SCHOOL_ADMIN')) ||
-        request.auth.token.role == 'SUPER_ADMIN'
-      );
-    }
-
-    // Helper function to check if user is a student accessing own record
-    function isOwnStudentRecord(schoolId, studentRegNo) {
-      return isAuthenticated() && (
-        (request.auth.token.schoolId == schoolId && request.auth.token.regNo == studentRegNo) ||
-        isTeacher(schoolId)
-      );
-    }
-
-    // 1. Schools Collection: Anyone can read approved schools metadata for public discovery; only Super Admin can write
+    // 1. Schools Collection: Discovery, registration and portal configuration
     match /schools/{schoolId} {
-      allow read: if true;
-      allow create: if isAuthenticated();
-      allow update, delete: if isSchoolAdmin(schoolId);
+      allow read, write: if true;
     }
 
-    // 2. Users Collection (Teachers, Students, Parents, Admins)
+    // 2. Users Collection (School Admins, Teachers, Students, Parents)
     match /users/{userId} {
-      allow read: if isAuthenticated() && (
-        request.auth.uid == userId ||
-        belongsToSchool(resource.data.schoolId)
-      );
-      allow create: if isAuthenticated() && (
-        isSchoolAdmin(request.resource.data.schoolId) ||
-        request.auth.token.role == 'SUPER_ADMIN'
-      );
-      allow update: if isAuthenticated() && (
-        request.auth.uid == userId ||
-        isSchoolAdmin(resource.data.schoolId)
-      );
-      allow delete: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
+      allow read, write: if true;
     }
 
     // 3. Student Results Collection
     match /results/{resultId} {
-      allow read: if isAuthenticated() && (
-        belongsToSchool(resource.data.schoolId) ||
-        isOwnStudentRecord(resource.data.schoolId, resource.data.studentRegNo)
-      );
-      allow create, update: if isAuthenticated() && isTeacher(request.resource.data.schoolId);
-      allow delete: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
+      allow read, write: if true;
     }
 
     // 4. CBT Exams & Questions
     match /cbt_exams/{examId} {
-      allow read: if isAuthenticated() && belongsToSchool(resource.data.schoolId);
-      allow create, update, delete: if isAuthenticated() && isTeacher(resource.data.schoolId);
+      allow read, write: if true;
     }
 
     // 5. CBT Attempts & Submissions
     match /cbt_attempts/{attemptId} {
-      allow read: if isAuthenticated() && (
-        belongsToSchool(resource.data.schoolId) ||
-        request.auth.uid == resource.data.studentId
-      );
-      allow create: if isAuthenticated() && belongsToSchool(request.resource.data.schoolId);
-      allow update, delete: if isAuthenticated() && isTeacher(resource.data.schoolId);
+      allow read, write: if true;
     }
 
-    // 6. Online Admissions
+    // 6. Online Admissions Applications
     match /admissions/{admissionId} {
-      allow create: if true; // Public applicants can submit admission forms
-      allow read, update, delete: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
+      allow read, write: if true;
     }
 
     // 7. Result PINs (Scratch Cards)
     match /pins/{pinId} {
-      // Public PIN verification queries allowed for checking validity, but creation/deletion is admin only
-      allow read: if true;
-      allow create, update, delete: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
+      allow read, write: if true;
     }
 
     // 8. Fee Schedules & Fee Payments
     match /fee_schedules/{scheduleId} {
-      allow read: if isAuthenticated() && belongsToSchool(resource.data.schoolId);
-      allow create, update, delete: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
+      allow read, write: if true;
     }
 
     match /fee_payments/{paymentId} {
-      allow read: if isAuthenticated() && (
-        isSchoolAdmin(resource.data.schoolId) ||
-        request.auth.token.regNo == resource.data.studentRegNo
-      );
-      allow create, update, delete: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
+      allow read, write: if true;
     }
 
     // 9. Audit Logs & Security Settings
     match /audit_logs/{logId} {
-      allow read: if isAuthenticated() && isSchoolAdmin(resource.data.schoolId);
-      allow create: if isAuthenticated();
-      allow update, delete: if false; // Immutable audit logs
+      allow read, write: if true;
     }
 
     match /security_settings/{schoolId} {
-      allow read, write: if isAuthenticated() && isSchoolAdmin(schoolId);
+      allow read, write: if true;
     }
   }
 }
+

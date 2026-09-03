@@ -26,8 +26,6 @@ export const EditTeacherClassesModal: React.FC<EditTeacherClassesModalProps> = (
   teacher,
   onSaved,
 }) => {
-  if (!isOpen || !teacher) return null;
-
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -74,6 +72,7 @@ export const EditTeacherClassesModal: React.FC<EditTeacherClassesModalProps> = (
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!teacher) return;
     if (selectedClasses.length === 0) {
       alert('Please assign at least one class to this teacher.');
       return;
@@ -92,6 +91,8 @@ export const EditTeacherClassesModal: React.FC<EditTeacherClassesModalProps> = (
       onClose();
     }, 400);
   };
+
+  if (!isOpen || !teacher) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn">

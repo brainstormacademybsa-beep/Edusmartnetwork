@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Users, Award, DollarSign, Printer, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Users, Award, DollarSign, Printer, ChevronRight, FileQuestion, Eye } from 'lucide-react';
 import { storageService } from '../../services/storageService';
-import { School, User } from '../../types';
+import { School, User, CbtAttempt, CbtExam } from '../../types';
 import { ResultCardPrint } from '../results/ResultCardPrint';
+import { CbtAttemptDetailsModal } from '../cbt/CbtAttemptDetailsModal';
 
 interface ParentDashboardProps {
   school: School;
@@ -15,6 +16,15 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ school, parent
   const children = allUsers.filter((u) => childRegNos.includes(u.regNo));
 
   const [selectedChildRegNo, setSelectedChildRegNo] = useState(childRegNos[0] || '');
+  const [selectedCbtAttempt, setSelectedCbtAttempt] = useState<CbtAttempt | null>(null);
+  const [selectedCbtExam, setSelectedCbtExam] = useState<CbtExam | null>(null);
+  const [, setDataVersion] = useState(0);
+
+  useEffect(() => {
+    return storageService.subscribe(() => {
+      setDataVersion((v) => v + 1);
+    });
+  }, []);
 
   const activeChild = children.find((c) => c.regNo === selectedChildRegNo) || children[0] || {
     id: 'temp',
@@ -28,6 +38,8 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ school, parent
 
   const childResults = storageService.getResults(school.id).filter((r) => r.studentRegNo === activeChild.regNo);
   const childPayments = storageService.getFeePayments(school.id).filter((p) => p.studentRegNo === activeChild.regNo);
+  const allCbtExams = storageService.getCbtExams(school.id);
+  const childCbtAttempts = storageService.getCbtAttempts(school.id).filter((a) => a.studentRegNo === activeChild.regNo);
 
   return (
     <div className="max-w-7xl mx-auto p-4 sm:p-6 space-y-6 text-slate-800">
@@ -134,6 +146,100 @@ export const ParentDashboard: React.FC<ParentDashboardProps> = ({ school, parent
           </table>
         </div>
       </div>
+
+      {/* Ward Computer-Based Test (CBT) Performance */}
+      <div className="bg-white border border-slate-200 rounded p-6 shadow-sm space-y-4 text-xs">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+          <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+            <FileQuestion className="w-5 h-5 text-amber-500" />
+            <span>CBT Online Exam Scores: {activeChild.name}</span>
+          </h2>
+          <span className="px-2.5 py-0.5 bg-blue-100 text-blue-900 font-bold rounded-full text-[10px] uppercase">
+            {childCbtAttempts.length} Tests Completed
+          </span>
+        </div>
+
+        {childCbtAttempts.length === 0 ? (
+          <div className="p-8 text-center bg-slate-50 border border-slate-200 rounded space-y-2">
+            <FileQuestion className="w-8 h-8 text-slate-300 mx-auto" />
+            <p className="text-xs font-bold text-slate-600 uppercase">No CBT Exams Taken Yet</p>
+            <p className="text-[11px] text-slate-400">
+              When {activeChild.name} completes an online test or examination, the score and answers will appear here.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto border border-slate-200 rounded">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50 text-slate-700 border-b border-slate-200 uppercase text-[10px] font-bold tracking-wider">
+                  <th className="p-3">Exam Title</th>
+                  <th className="p-3">Subject</th>
+                  <th className="p-3 text-center">Score</th>
+                  <th className="p-3 text-center">Percentage</th>
+                  <th className="p-3 text-center">Status</th>
+                  <th className="p-3">Date Completed</th>
+                  <th className="p-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {childCbtAttempts.map((att) => {
+                  const exam = allCbtExams.find((e) => e.id === att.examId);
+                  return (
+                    <tr key={att.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-bold text-slate-900 uppercase">{att.examTitle}</td>
+                      <td className="p-3 text-blue-900 font-semibold">{exam?.subject || 'Subject'}</td>
+                      <td className="p-3 text-center font-mono font-bold text-slate-900">
+                        {att.score} / {att.maxScore}
+                      </td>
+                      <td className="p-3 text-center font-mono font-bold">
+                        <span className={att.percentage >= 50 ? 'text-emerald-700' : 'text-red-600'}>
+                          {att.percentage}%
+                        </span>
+                      </td>
+                      <td className="p-3 text-center">
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                            att.isPassed
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                              : 'bg-red-100 text-red-800 border border-red-300'
+                          }`}
+                        >
+                          {att.isPassed ? 'PASS' : 'FAIL'}
+                        </span>
+                      </td>
+                      <td className="p-3 text-[10px] text-slate-500 whitespace-nowrap">
+                        {new Date(att.submittedAt).toLocaleDateString()}
+                      </td>
+                      <td className="p-3 text-right">
+                        <button
+                          onClick={() => {
+                            setSelectedCbtAttempt(att);
+                            setSelectedCbtExam(exam || null);
+                          }}
+                          className="px-3 py-1 bg-blue-900 hover:bg-blue-800 text-amber-300 font-bold uppercase tracking-wider rounded text-[10px] shadow-xs inline-flex items-center gap-1.5 transition"
+                        >
+                          <Eye className="w-3.5 h-3.5" /> View Breakdown
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* CBT Attempt Review Modal */}
+      <CbtAttemptDetailsModal
+        isOpen={!!selectedCbtAttempt}
+        onClose={() => {
+          setSelectedCbtAttempt(null);
+          setSelectedCbtExam(null);
+        }}
+        attempt={selectedCbtAttempt}
+        exam={selectedCbtExam}
+      />
     </div>
   );
 };

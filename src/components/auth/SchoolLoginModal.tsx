@@ -46,8 +46,6 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
   onOpenPinChecker,
   defaultRoleTab = 'admin',
 }) => {
-  if (!isOpen || !school) return null;
-
   // Active role tab: 'admin', 'teacher', 'student', 'parents'
   const [activeTab, setActiveTab] = useState<SchoolLoginRoleTab>(defaultRoleTab);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -77,7 +75,7 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
   const [resetIdentifier, setResetIdentifier] = useState('');
 
   // Load sample users for quick demo chips
-  const allSchoolUsers = storageService.getUsers().filter((u) => u.schoolId === school.id);
+  const allSchoolUsers = school ? storageService.getUsers().filter((u) => u.schoolId === school.id) : [];
   const sampleAdmin = allSchoolUsers.find((u) => u.role === 'SCHOOL_ADMIN');
   const sampleTeachers = allSchoolUsers.filter((u) => u.role === 'TEACHER');
   const sampleStudents = allSchoolUsers.filter((u) => u.role === 'STUDENT');
@@ -96,7 +94,7 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
 
     // Pre-populate sample defaults if fields are empty
     if (sampleAdmin && !adminEmail) {
-      setAdminEmail(sampleAdmin.email || `admin@${school.subdomain}.edu.ng`);
+      setAdminEmail(sampleAdmin.email || (school ? `admin@${school.subdomain}.edu.ng` : ''));
       setAdminPassword('password123');
     }
     if (sampleTeachers.length > 0 && !teacherEmail) {
@@ -112,6 +110,7 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
   }, [isOpen, school?.id]);
 
   const handleCopyDirectLink = () => {
+    if (!school) return;
     const directUrl = `${window.location.origin}${window.location.pathname}?school=${school.subdomain}`;
     navigator.clipboard.writeText(directUrl);
     setCopiedLink(true);
@@ -121,6 +120,7 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
   // Handle Admin Login
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!school) return;
     setError('');
     if (!adminEmail.trim()) {
       setError('Please enter your school administrator email address.');
@@ -147,6 +147,7 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
   // Handle Teacher Login
   const handleTeacherLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!school) return;
     setError('');
     if (!teacherEmail.trim()) {
       setError('Please enter your teacher/staff email address.');
@@ -173,6 +174,7 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
   // Handle Student Login (Student Full Name + Admission Number)
   const handleStudentLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!school) return;
     setError('');
     if (!studentFullName.trim()) {
       setError('Please enter your full student name as registered.');
@@ -199,6 +201,7 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
   // Handle Parent Login (Child Full Name + Child Admission Number)
   const handleParentLogin = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!school) return;
     setError('');
     if (!childFullName.trim()) {
       setError("Please enter your child's full registered name.");
@@ -224,6 +227,7 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
 
   // Handle Google Sign-In
   const handleGoogleSignIn = async () => {
+    if (!school) return;
     setError('');
     setIsGoogleLoading(true);
     try {
@@ -240,6 +244,8 @@ export const SchoolLoginModal: React.FC<SchoolLoginModalProps> = ({
       setError(err?.message || 'Google Sign-in failed. Please try standard sign-in.');
     }
   };
+
+  if (!isOpen || !school) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-fadeIn">

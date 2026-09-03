@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { School, StudentResult, User } from '../../types';
 import { MessageCircle, Send, Check, Phone, X, Edit3, ExternalLink } from 'lucide-react';
 import { storageService } from '../../services/storageService';
@@ -70,13 +70,19 @@ export const WhatsAppShareModal: React.FC<WhatsAppShareModalProps> = ({
   term,
   session,
 }) => {
-  const initialPhone = student.parentWhatsapp || student.parentPhone || student.phone || '';
+  const initialPhone = student?.parentWhatsapp || student?.parentPhone || student?.phone || '';
   const [phoneNumber, setPhoneNumber] = useState(initialPhone);
   const [savePhoneToUser, setSavePhoneToUser] = useState(true);
   const [copied, setCopied] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    if (student) {
+      setPhoneNumber(student.parentWhatsapp || student.parentPhone || student.phone || '');
+    }
+  }, [student, isOpen]);
+
+  if (!isOpen || !student || !school) return null;
 
   const formattedPhone = formatPhoneForWhatsApp(phoneNumber);
   const messageText = generateWhatsAppResultText(school, student, results, term, session);

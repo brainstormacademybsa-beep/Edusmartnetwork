@@ -23,22 +23,20 @@ export const StudentReportEditorModal: React.FC<StudentReportEditorModalProps> =
   session,
   onSaved,
 }) => {
-  if (!isOpen || !student) return null;
-
   const [studentData, setStudentData] = useState({
-    name: student.name || '',
-    regNo: student.regNo || '',
-    className: student.className || 'Primary3',
-    department: student.department || 'Middle Basic',
-    gender: student.gender || 'Male',
-    dob: student.dob || '01-04-2017',
-    daysOpened: student.daysOpened ?? 92,
-    daysPresent: student.daysPresent ?? 86,
-    daysAbsent: student.daysAbsent ?? 6,
-    termBegins: student.termBegins || '27-04-2026',
-    termEnds: student.termEnds || '10-07-2026',
-    nextTermBegins: student.nextTermBegins || '14-09-2026',
-    teacherComment: student.teacherComment || '',
+    name: student?.name || '',
+    regNo: student?.regNo || '',
+    className: student?.className || 'Primary3',
+    department: student?.department || 'Middle Basic',
+    gender: student?.gender || 'Male',
+    dob: student?.dob || '01-04-2017',
+    daysOpened: student?.daysOpened ?? 92,
+    daysPresent: student?.daysPresent ?? 86,
+    daysAbsent: student?.daysAbsent ?? 6,
+    termBegins: student?.termBegins || '27-04-2026',
+    termEnds: student?.termEnds || '10-07-2026',
+    nextTermBegins: student?.nextTermBegins || '14-09-2026',
+    teacherComment: student?.teacherComment || '',
   });
 
   const [results, setResults] = useState<StudentResult[]>([]);
@@ -79,6 +77,22 @@ export const StudentReportEditorModal: React.FC<StudentReportEditorModalProps> =
   // Load initial student results and domain scores on mount/open
   useEffect(() => {
     if (student) {
+      setStudentData({
+        name: student.name || '',
+        regNo: student.regNo || '',
+        className: student.className || 'Primary3',
+        department: student.department || 'Middle Basic',
+        gender: student.gender || 'Male',
+        dob: student.dob || '01-04-2017',
+        daysOpened: student.daysOpened ?? 92,
+        daysPresent: student.daysPresent ?? 86,
+        daysAbsent: student.daysAbsent ?? 6,
+        termBegins: student.termBegins || '27-04-2026',
+        termEnds: student.termEnds || '10-07-2026',
+        nextTermBegins: student.nextTermBegins || '14-09-2026',
+        teacherComment: student.teacherComment || '',
+      });
+
       const allResults = storageService.getResults(school.id);
       const studentRes = allResults.filter(
         (r) => r.studentRegNo === student.regNo && r.term === term && r.session === session
@@ -86,8 +100,8 @@ export const StudentReportEditorModal: React.FC<StudentReportEditorModalProps> =
 
       setResults(studentRes);
 
-      if (student.affectiveScores) setAffectiveScores({ ...affectiveScores, ...student.affectiveScores });
-      if (student.psychomotorScores) setPsychomotorScores({ ...psychomotorScores, ...student.psychomotorScores });
+      if (student.affectiveScores) setAffectiveScores((prev) => ({ ...prev, ...student.affectiveScores }));
+      if (student.psychomotorScores) setPsychomotorScores((prev) => ({ ...prev, ...student.psychomotorScores }));
 
       const feeSchedules = storageService.getFeeSchedules(school.id);
       const matchedFee = feeSchedules.find(
@@ -103,7 +117,7 @@ export const StudentReportEditorModal: React.FC<StudentReportEditorModalProps> =
         });
       }
     }
-  }, [student, term, session, school.id]);
+  }, [student, term, session, school.id, isOpen]);
 
   const handleScoreChange = (index: number, field: 'ca' | 'exam' | 'subject' | 'remark', value: string | number) => {
     const updated = [...results];
@@ -193,6 +207,8 @@ export const StudentReportEditorModal: React.FC<StudentReportEditorModalProps> =
       alert('Failed to save report details.');
     }
   };
+
+  if (!isOpen || !student) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn overflow-y-auto">

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GraduationCap,
   FileQuestion,
@@ -11,8 +11,9 @@ import {
   KeyRound,
 } from 'lucide-react';
 import { storageService } from '../../services/storageService';
-import { CbtExam, School, StudentResult, User } from '../../types';
+import { CbtAttempt, CbtExam, School, StudentResult, User } from '../../types';
 import { CbtExamPlayer } from '../cbt/CbtExamPlayer';
+import { CbtAttemptDetailsModal } from '../cbt/CbtAttemptDetailsModal';
 import { ResultCardPrint } from '../results/ResultCardPrint';
 import { ResultPinChecker } from '../results/ResultPinChecker';
 import { FeeReceiptPrint } from '../fees/FeeReceiptPrint';
@@ -25,6 +26,15 @@ interface StudentDashboardProps {
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({ school, student }) => {
   const [activeTab, setActiveTab] = useState<'cbt' | 'results' | 'fees'>('cbt');
   const [selectedExam, setSelectedExam] = useState<CbtExam | null>(null);
+  const [selectedAttemptForModal, setSelectedAttemptForModal] = useState<CbtAttempt | null>(null);
+  const [selectedExamForModal, setSelectedExamForModal] = useState<CbtExam | null>(null);
+  const [, setDataVersion] = useState(0);
+
+  useEffect(() => {
+    return storageService.subscribe(() => {
+      setDataVersion((v) => v + 1);
+    });
+  }, []);
 
   const cbtExams = storageService.getCbtExams(school.id).filter((e) => e.className === student.className || !student.className);
   const attempts = storageService.getCbtAttempts(school.id).filter((a) => a.studentRegNo === student.regNo);
@@ -84,7 +94,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ school, stud
               activeTab === 'cbt' ? 'bg-amber-500 text-slate-950 shadow' : 'text-blue-200 hover:text-white hover:bg-blue-800'
             }`}
           >
-            <FileQuestion className="w-3.5 h-3.5" /> CBT Exams
+            <FileQuestion className="w-3.5 h-3.5" /> CBT Exams & Scores
+            {attempts.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.2 bg-blue-900 text-white rounded text-[9px] font-mono">
+                {attempts.length}
+              </span>
+            )}
           </button>
 
           <button
@@ -107,86 +122,198 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ school, stud
         </div>
       </div>
 
-      {/* TAB 1: AVAILABLE CBT EXAMS */}
+      {/* TAB 1: AVAILABLE CBT EXAMS & SCORES */}
       {activeTab === 'cbt' && (
-        <div className="bg-white border border-slate-200 rounded p-6 shadow-sm space-y-4 text-xs">
-          <div className="border-b border-slate-200 pb-3">
-            <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
-              <FileQuestion className="w-5 h-5 text-amber-500" />
-              <span>Available Computer Based Tests (CBT)</span>
-            </h2>
-            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight mt-0.5">
-              Select an exam to begin. Timers will start immediately upon clicking "Take Exam".
-            </p>
-          </div>
-
-          {cbtExams.length === 0 ? (
-            <div className="p-12 text-center bg-slate-50 border border-slate-200 rounded space-y-3">
-              <FileQuestion className="w-12 h-12 text-slate-300 mx-auto" />
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">No CBT Exams currently assigned to your class.</p>
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded p-6 shadow-sm space-y-4 text-xs">
+            <div className="border-b border-slate-200 pb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                  <FileQuestion className="w-5 h-5 text-amber-500" />
+                  <span>Available Computer Based Tests (CBT)</span>
+                </h2>
+                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tight mt-0.5">
+                  Select an exam to begin. Timers will start immediately upon clicking "Start Examination".
+                </p>
+              </div>
+              <span className="text-[11px] font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded border border-slate-200">
+                Class: <strong className="text-blue-900">{student.className}</strong>
+              </span>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {cbtExams.map((e) => {
-                const prevAttempt = attempts.find((a) => a.examId === e.id);
 
-                return (
-                  <div key={e.id} className="bg-white p-5 rounded border border-slate-200 space-y-4 relative shadow-sm hover:border-blue-900 transition-all group overflow-hidden">
-                    <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-900 group-hover:w-2 transition-all"></div>
-                    
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-blue-900">
-                          {e.subject}
-                        </span>
-                        <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
-                          <Play className="w-2.5 h-2.5" /> Exam ID: {e.id.slice(-6)}
-                        </div>
-                      </div>
-                      <h3 className="font-black text-slate-900 uppercase text-sm leading-tight tracking-tight">
-                        {e.title}
-                      </h3>
-                    </div>
+            {cbtExams.length === 0 ? (
+              <div className="p-12 text-center bg-slate-50 border border-slate-200 rounded space-y-3">
+                <FileQuestion className="w-12 h-12 text-slate-300 mx-auto" />
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">No CBT Exams currently assigned to your class.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                {cbtExams.map((e) => {
+                  const prevAttempt = attempts.find((a) => a.examId === e.id);
 
-                    <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-wider">
-                      <div className="bg-slate-50 p-2 rounded border border-slate-100 flex flex-col gap-0.5">
-                        <span className="text-slate-400 text-[8px]">Duration</span>
-                        <span className="text-slate-900">{e.durationMinutes} Minutes</span>
-                      </div>
-                      <div className="bg-slate-50 p-2 rounded border border-slate-100 flex flex-col gap-0.5">
-                        <span className="text-slate-400 text-[8px]">Questions</span>
-                        <span className="text-slate-900">{e.questions.length} Items</span>
-                      </div>
-                    </div>
-
-                    {prevAttempt ? (
-                      <div className="p-3 bg-emerald-50 rounded border border-emerald-200 flex items-center justify-between">
-                        <div className="flex flex-col">
-                          <span className="text-[8px] font-black text-emerald-800 uppercase tracking-widest">Result Status</span>
-                          <span className="text-xs font-black text-emerald-900 uppercase">
-                            Score: {prevAttempt.score} / {prevAttempt.maxScore}
+                  return (
+                    <div key={e.id} className="bg-white p-5 rounded border border-slate-200 space-y-4 relative shadow-sm hover:border-blue-900 transition-all group overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-900 group-hover:w-2 transition-all"></div>
+                      
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-blue-900">
+                            {e.subject}
                           </span>
+                          <div className="flex items-center gap-1 text-[9px] font-bold text-slate-400">
+                            <Play className="w-2.5 h-2.5" /> ID: {e.id.slice(-6)}
+                          </div>
                         </div>
+                        <h3 className="font-black text-slate-900 uppercase text-sm leading-tight tracking-tight">
+                          {e.title}
+                        </h3>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[10px] font-bold uppercase tracking-wider">
+                        <div className="bg-slate-50 p-2 rounded border border-slate-100 flex flex-col gap-0.5">
+                          <span className="text-slate-400 text-[8px]">Duration</span>
+                          <span className="text-slate-900">{e.durationMinutes} Minutes</span>
+                        </div>
+                        <div className="bg-slate-50 p-2 rounded border border-slate-100 flex flex-col gap-0.5">
+                          <span className="text-slate-400 text-[8px]">Questions</span>
+                          <span className="text-slate-900">{e.questions.length} Items</span>
+                        </div>
+                      </div>
+
+                      {prevAttempt ? (
+                        <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 space-y-2.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                              <span className="text-[8px] font-black text-emerald-800 uppercase tracking-widest">Score Attained</span>
+                              <span className="text-sm font-black text-emerald-950 font-mono">
+                                {prevAttempt.score} / {prevAttempt.maxScore} ({prevAttempt.percentage}%)
+                              </span>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-wider ${
+                              prevAttempt.isPassed ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                            }`}>
+                              {prevAttempt.isPassed ? 'PASSED ✓' : 'FAILED ✗'}
+                            </span>
+                          </div>
+
+                          <button
+                            onClick={() => {
+                              setSelectedAttemptForModal(prevAttempt);
+                              setSelectedExamForModal(e);
+                            }}
+                            className="w-full py-1.5 bg-white border border-emerald-300 hover:bg-emerald-100 text-emerald-950 rounded text-[10px] font-black uppercase tracking-wider shadow-sm transition flex items-center justify-center gap-1.5"
+                          >
+                            <Award className="w-3.5 h-3.5 text-emerald-700" /> View Answers & Score Details
+                          </button>
+                        </div>
+                      ) : (
                         <button
                           onClick={() => setSelectedExam(e)}
-                          className="px-3 py-1.5 bg-white border border-emerald-200 hover:bg-emerald-100 text-emerald-900 rounded text-[9px] font-black uppercase tracking-widest shadow-sm transition"
+                          className="w-full py-2.5 bg-blue-900 hover:bg-blue-800 text-amber-300 font-black uppercase tracking-widest rounded text-[10px] shadow-sm transition flex items-center justify-center gap-2"
                         >
-                          Details
+                          <Play className="w-3.5 h-3.5 fill-current text-amber-400" /> Start Examination
                         </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => setSelectedExam(e)}
-                        className="w-full py-2.5 bg-blue-900 hover:bg-blue-800 text-amber-300 font-black uppercase tracking-widest rounded text-[10px] shadow-sm transition flex items-center justify-center gap-2"
-                      >
-                        <Play className="w-3.5 h-3.5 fill-current text-amber-400" /> Start Examination
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* DEDICATED STUDENT CBT TEST SCORES HISTORY TABLE */}
+          <div className="bg-white border border-slate-200 rounded p-6 shadow-sm space-y-4 text-xs">
+            <div className="border-b border-slate-200 pb-3 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-500/10 text-amber-600 rounded-lg">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                    My CBT Test Scores & Performance History
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wide">
+                    All completed computer based test attempts, grades, and full answer sheets
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded">
+                Total Completed: <strong className="text-slate-900">{attempts.length}</strong>
+              </span>
             </div>
-          )}
+
+            {attempts.length === 0 ? (
+              <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded text-slate-500">
+                You have not completed any CBT exams yet. Take an exam above to view your score history here.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-900 text-white uppercase text-[10px] tracking-wider">
+                      <th className="p-3">Exam Title</th>
+                      <th className="p-3">Subject</th>
+                      <th className="p-3">Points Scored</th>
+                      <th className="p-3">Percentage</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3">Date Completed</th>
+                      <th className="p-3 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium">
+                    {attempts.map((att) => {
+                      const matchedExam = cbtExams.find((e) => e.id === att.examId);
+                      const formattedDate = att.submittedAt
+                        ? new Date(att.submittedAt).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : 'Completed';
+
+                      return (
+                        <tr key={att.id} className="hover:bg-slate-50 transition">
+                          <td className="p-3 font-bold text-slate-900">{att.examTitle}</td>
+                          <td className="p-3 font-semibold text-blue-900">{matchedExam?.subject || 'CBT Subject'}</td>
+                          <td className="p-3 font-mono font-bold text-slate-800">
+                            {att.score} / {att.maxScore}
+                          </td>
+                          <td className="p-3 font-mono font-black text-blue-700">
+                            {att.percentage}%
+                          </td>
+                          <td className="p-3">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-wider ${
+                                att.isPassed
+                                  ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                  : 'bg-red-100 text-red-800 border border-red-200'
+                              }`}
+                            >
+                              {att.isPassed ? 'PASS ✓' : 'FAIL ✗'}
+                            </span>
+                          </td>
+                          <td className="p-3 text-slate-500 text-[11px]">{formattedDate}</td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => {
+                                setSelectedAttemptForModal(att);
+                                setSelectedExamForModal(matchedExam || null);
+                              }}
+                              className="px-3 py-1.5 bg-blue-900 hover:bg-blue-800 text-amber-300 font-bold uppercase tracking-wider rounded text-[10px] shadow-sm transition"
+                            >
+                              View Answers
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -249,6 +376,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({ school, stud
           </div>
         </div>
       )}
+
+      {/* CBT ATTEMPT & ANSWER DETAILS MODAL */}
+      <CbtAttemptDetailsModal
+        isOpen={!!selectedAttemptForModal}
+        onClose={() => {
+          setSelectedAttemptForModal(null);
+          setSelectedExamForModal(null);
+        }}
+        attempt={selectedAttemptForModal}
+        exam={selectedExamForModal}
+      />
     </div>
   );
 };

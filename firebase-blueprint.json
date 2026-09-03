@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "School": {
+      "title": "School",
+      "description": "School organization metadata and portal configurations",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "subdomain": { "type": "string" },
+        "address": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "logoUrl": { "type": "string" },
+        "status": { "type": "string" },
+        "isApproved": { "type": "boolean" },
+        "studentCount": { "type": "number" },
+        "teacherCount": { "type": "number" }
+      },
+      "required": ["id", "name", "subdomain", "email"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Registered school administrators, teachers, students, and parents",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "regNo": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "className": { "type": "string" }
+      },
+      "required": ["id", "schoolId", "name", "role"]
+    },
+    "StudentResult": {
+      "title": "StudentResult",
+      "description": "Termly academic assessment records for students",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "studentRegNo": { "type": "string" },
+        "subject": { "type": "string" },
+        "totalScore": { "type": "number" }
+      },
+      "required": ["id", "schoolId", "studentId", "subject"]
+    },
+    "CbtExam": {
+      "title": "CbtExam",
+      "description": "Computer-based test exam schedules and questions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "title": { "type": "string" },
+        "subject": { "type": "string" },
+        "className": { "type": "string" }
+      },
+      "required": ["id", "schoolId", "title", "subject"]
+    },
+    "CbtAttempt": {
+      "title": "CbtAttempt",
+      "description": "Student CBT test submissions and auto-graded results",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "examId": { "type": "string" },
+        "studentId": { "type": "string" },
+        "schoolId": { "type": "string" },
+        "score": { "type": "number" }
+      },
+      "required": ["id", "examId", "studentId", "schoolId"]
+    }
+  },
+  "firestore": {
+    "/schools/{schoolId}": {
+      "schema": "School",
+      "description": "Collection of schools"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of registered users"
+    },
+    "/results/{resultId}": {
+      "schema": "StudentResult",
+      "description": "Academic results collection"
+    },
+    "/cbt_exams/{examId}": {
+      "schema": "CbtExam",
+      "description": "CBT examinations"
+    },
+    "/cbt_attempts/{attemptId}": {
+      "schema": "CbtAttempt",
+      "description": "CBT attempts"
+    }
+  }
+}
